@@ -1,48 +1,11 @@
-// Based on:
-//	of some code of 3Dlabs Inc. Ltd.
-//	and http://stackoverflow.com/questions/11365399/opengl-shader-a-spotlight-and-a-directional-light?answertab=active#tab-top
-/************************************************************************
-*                                                                       *                                                                       
-*                                                                       *
-*        Copyright (C) 2002-2004  3Dlabs Inc. Ltd.                      *
-*                                                                       *
-*                        All rights reserved.                           *
-*                                                                       *
-* Redistribution and use in source and binary forms, with or without    *
-* modification, are permitted provided that the following conditions    *
-* are met:                                                              *
-*                                                                       *
-*     Redistributions of source code must retain the above copyright    *
-*     notice, this list of conditions and the following disclaimer.     *
-*                                                                       *
-*     Redistributions in binary form must reproduce the above           *
-*     copyright notice, this list of conditions and the following       *
-*     disclaimer in the documentation and/or other materials provided   *
-*     with the distribution.                                            *
-*                                                                       *
-*     Neither the name of 3Dlabs Inc. Ltd. nor the names of its         *
-*     contributors may be used to endorse or promote products derived   *
-*     from this software without specific prior written permission.     *
-*                                                                       *
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS   *
-* "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT     *
-* LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS     *
-* FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE        *
-* COPYRIGHT HOLDERS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, *
-* INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,  *
-* BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;      *
-* LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER      *
-* CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT    *
-* LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN     *
-* ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE       *
-* POSSIBILITY OF SUCH DAMAGE.                                           *
-*                                                                       *
-************************************************************************/
+// Based on: https://github.com/KhronosGroup/glTF-Sample-Viewer
 
 #version 330
 
 #define FALSE		0
 #define MAX_LIGHTS	8
+#define GAMMA		100.0
+#define M_PI		3.141592653589793
 
 struct Material {
 	vec4 ambient;
@@ -66,6 +29,7 @@ struct Light {
 	float quadraticAttenuation;
 };
 
+uniform mat4 cameraMatrix;
 uniform Material material;
 uniform Light lights[MAX_LIGHTS];
 
@@ -127,52 +91,188 @@ vec4 fragColor;
 
 #if defined(HAVE_SOLID_SHADING)
 #else
-	void computeLight(in int i, in vec3 normal, in vec3 position) {
-		vec3 lightDirection = lights[i].position.xyz - position.xyz;
-		float lightDistance = length(lightDirection);
-		lightDirection = normalize(lightDirection);
-		vec3 eyeDirection = normalize(-position);
-		vec3 reflectionDirection = normalize(reflect(-lightDirection, normal));
+	struct PBRMaterialInfo
+	{
+		float perceptualRoughness;    // roughness value, as authored by the model creator (input to shader)
+		vec3 reflectance0;            // full reflectance color (normal incidence angle)
 
-		// compute attenuation
-		float lightAttenuation =
-			1.0 /
-			(
-				lights[i].constantAttenuation +
-				lights[i].linearAttenuation * lightDistance +
-				lights[i].quadraticAttenuation * lightDistance * lightDistance
-			);
+		float alphaRoughness;         // roughness mapped to a more linear change in the roughness (proposed by [2])
+		vec3 diffuseColor;            // color contribution from diffuse lighting
 
-		// see if point on surface is inside cone of illumination
-		float lightSpotDot = dot(-lightDirection, normalize(lights[i].spotDirection));
-		float lightSpotAttenuation = 0.0;
-		if (lightSpotDot >= lights[i].spotCosCutoff) {
-			lightSpotAttenuation = pow(lightSpotDot, lights[i].spotExponent);
-		}
+		vec3 reflectance90;           // reflectance color at grazing angle
+		vec3 specularColor;           // color contribution from specular lighting
+	};
 
-		// Combine the spotlight and distance attenuation.
-		lightAttenuation *= lightSpotAttenuation;
+	struct PBRAngularInfo
+	{
+		float NdotL;                  // cos angle between normal and light direction
+		float NdotV;                  // cos angle between normal and view direction
+		float NdotH;                  // cos angle between normal and half vector
+		float LdotH;                  // cos angle between light direction and half vector
+		float VdotH;                  // cos angle between view direction and half vector
+		vec3 padding;
+	};
 
-		// add color components to fragment color
-		fragColor+=
-			clamp(lights[i].ambient * material.ambient, 0.0, 1.0) +
-			clamp(lights[i].diffuse * material.diffuse * max(dot(normal, lightDirection), 0.0) * lightAttenuation, 0.0, 1.0) +
-			clamp(lights[i].specular * material.specular * pow(max(dot(reflectionDirection, eyeDirection), 0.0), 0.3 * materialShininess) * lightAttenuation, 0.0, 1.0);
+	// sRGB to linear approximation
+	// see http://chilliant.blogspot.com/2012/08/srgb-approximations-for-hlsl.html
+	vec4 SRGBtoLINEAR(vec4 srgbIn)
+	{
+	    return vec4(pow(srgbIn.xyz, vec3(GAMMA)), srgbIn.w);
 	}
 
-	void computeLights(in vec3 normal, in vec3 position) {
+	// Lambert lighting
+	// see https://seblagarde.wordpress.com/2012/01/08/pi-or-not-to-pi-in-game-lighting-equation/
+	vec3 diffuse(PBRMaterialInfo materialInfo)
+	{
+	    return materialInfo.diffuseColor / M_PI;
+	}
+
+	PBRAngularInfo getAngularInfo(vec3 pointToLight, vec3 normal, vec3 view)
+	{
+	    // Standard one-letter names
+	    vec3 n = normalize(normal);           // Outward direction of surface point
+	    vec3 v = normalize(view);             // Direction from surface point to view
+	    vec3 l = normalize(pointToLight);     // Direction from surface point to light
+	    vec3 h = normalize(l + v);            // Direction of the vector between l and v
+
+	    float NdotL = clamp(dot(n, l), 0.0, 1.0);
+	    float NdotV = clamp(dot(n, v), 0.0, 1.0);
+	    float NdotH = clamp(dot(n, h), 0.0, 1.0);
+	    float LdotH = clamp(dot(l, h), 0.0, 1.0);
+	    float VdotH = clamp(dot(v, h), 0.0, 1.0);
+
+	    return PBRAngularInfo(
+	        NdotL,
+	        NdotV,
+	        NdotH,
+	        LdotH,
+	        VdotH,
+	        vec3(0, 0, 0)
+	    );
+	}
+
+	// The following equation models the Fresnel reflectance term of the spec equation (aka F())
+	// Implementation of fresnel from [4], Equation 15
+	vec3 specularReflection(PBRMaterialInfo materialInfo, PBRAngularInfo angularInfo)
+	{
+	    return materialInfo.reflectance0 + (materialInfo.reflectance90 - materialInfo.reflectance0) * pow(clamp(1.0 - angularInfo.VdotH, 0.0, 1.0), 5.0);
+	}
+
+	// Smith Joint GGX
+	// Note: Vis = G / (4 * NdotL * NdotV)
+	// see Eric Heitz. 2014. Understanding the Masking-Shadowing Function in Microfacet-Based BRDFs. Journal of Computer Graphics Techniques, 3
+	// see Real-Time Rendering. Page 331 to 336.
+	// see https://google.github.io/filament/Filament.md.html#materialsystem/specularbrdf/geometricshadowing(specularg)
+	float visibilityOcclusion(PBRMaterialInfo materialInfo, PBRAngularInfo angularInfo)
+	{
+	    float NdotL = angularInfo.NdotL;
+	    float NdotV = angularInfo.NdotV;
+	    float alphaRoughnessSq = materialInfo.alphaRoughness * materialInfo.alphaRoughness;
+
+	    float GGXV = NdotL * sqrt(NdotV * NdotV * (1.0 - alphaRoughnessSq) + alphaRoughnessSq);
+	    float GGXL = NdotV * sqrt(NdotL * NdotL * (1.0 - alphaRoughnessSq) + alphaRoughnessSq);
+
+	    float GGX = GGXV + GGXL;
+	    if (GGX > 0.0)
+	    {
+	        return 0.5 / GGX;
+	    }
+	    return 0.0;
+	}
+
+	// The following equation(s) model the distribution of microfacet normals across the area being drawn (aka D())
+	// Implementation from "Average Irregularity Representation of a Roughened Surface for Ray Reflection" by T. S. Trowbridge, and K. P. Reitz
+	// Follows the distribution function recommended in the SIGGRAPH 2013 course notes from EPIC Games [1], Equation 3.
+	float microfacetDistribution(PBRMaterialInfo materialInfo, PBRAngularInfo angularInfo)
+	{
+	    float alphaRoughnessSq = materialInfo.alphaRoughness * materialInfo.alphaRoughness;
+	    float f = (angularInfo.NdotH * alphaRoughnessSq - angularInfo.NdotH) * angularInfo.NdotH + 1.0;
+	    return alphaRoughnessSq / (M_PI * f * f);
+	}
+
+	vec3 getPointShade(vec3 pointToLight, PBRMaterialInfo materialInfo, vec3 normal, vec3 view)
+	{
+		PBRAngularInfo angularInfo = getAngularInfo(pointToLight, normal, view);
+
+		if (angularInfo.NdotL > 0.0 || angularInfo.NdotV > 0.0)
+		{
+			// Calculate the shading terms for the microfacet specular shading model
+			vec3 F = specularReflection(materialInfo, angularInfo);
+			float Vis = visibilityOcclusion(materialInfo, angularInfo);
+			float D = microfacetDistribution(materialInfo, angularInfo);
+
+			// Calculation of analytical lighting contribution
+			vec3 diffuseContrib = (1.0 - F) * diffuse(materialInfo);
+			vec3 specContrib = F * Vis * D;
+
+			// Obtain final intensity as reflectance (BRDF) scaled by the energy of the light (cosine law)
+			return angularInfo.NdotL * (diffuseContrib + specContrib);
+		}
+
+		return vec3(0.0, 0.0, 0.0);
+	}
+
+	void applyDirectionalLight(Light light, PBRMaterialInfo materialInfo, vec3 normal, vec3 view, vec3 position)
+	{
+		vec3 direction = light.position.xyz - position.xyz;
+	    vec3 pointToLight = -direction;
+	    vec3 shade = getPointShade(pointToLight, materialInfo, normal, view);
+	    // return light.intensity * light.color * shade;
+	    fragColor+= light.diffuse * vec4(shade, 1.0);
+	}
+
+	/*
+	vec3 applyPointLight(Light light, PBRMaterialInfo materialInfo, vec3 normal, vec3 view)
+	{
+	    vec3 pointToLight = light.position - v_Position;
+	    float distance = length(pointToLight);
+	    float attenuation = getRangeAttenuation(light.range, distance);
+	    vec3 shade = getPointShade(pointToLight, materialInfo, normal, view);
+	    return attenuation * light.intensity * light.color * shade;
+	}
+
+	vec3 applySpotLight(Light light, PBRMaterialInfo materialInfo, vec3 normal, vec3 view)
+	{
+	    vec3 pointToLight = light.position - v_Position;
+	    float distance = length(pointToLight);
+	    float rangeAttenuation = getRangeAttenuation(light.range, distance);
+	    float spotAttenuation = getSpotAttenuation(pointToLight, light.direction, light.outerConeCos, light.innerConeCos);
+	    vec3 shade = getPointShade(pointToLight, materialInfo, normal, view);
+	    return rangeAttenuation * spotAttenuation * light.intensity * light.color * shade;
+	}
+	*/
+
+	void computeLights(in vec3 normal, in vec3 position, PBRMaterialInfo materialInfo) {
+	    //
+		vec3 view = normalize(vec3(cameraMatrix[3][0], cameraMatrix[3][1], cameraMatrix[3][2]) - position);
+
 		// process each light
 		for (int i = 0; i < MAX_LIGHTS; i++) {
-			// skip on disabled lights
-			if (lights[i].enabled == FALSE) continue;
+			Light light = lights[i];
 
-			// compute light
-			computeLight(i, normal, position);
+			// skip on disabled lights
+			if (light.enabled == FALSE) continue;
+
+			//
+			applyDirectionalLight(light, materialInfo, normal, view, position);
 		}
 	}
+
+	vec3 toneMap(vec3 color)
+	{
+		return pow(color, vec3(1.0 / GAMMA));
+	}
+
 #endif
 
 void main(void) {
+	#if defined(HAVE_DEPTH_FOG)
+		float fogStrength = 0.0;
+		if (fragDepth > FOG_DISTANCE_NEAR) {
+			fogStrength = (clamp(fragDepth, FOG_DISTANCE_NEAR, FOG_DISTANCE_MAX) - FOG_DISTANCE_NEAR) * 1.0 / (FOG_DISTANCE_MAX - FOG_DISTANCE_NEAR);
+		}
+	#endif
+
 	// retrieve diffuse texture color value
 	#if defined(HAVE_TERRAIN_SHADER)
 		// no op
@@ -198,7 +298,12 @@ void main(void) {
 
 	#if defined(HAVE_SOLID_SHADING)
 		fragColor+= material.ambient;
-		// no op
+		if (diffuseTextureAvailable == 1) {
+			outColor = clamp((gsEffectColorAdd + diffuseTextureColor) * fragColor, 0.0, 1.0);
+		} else {
+			outColor = clamp(gsEffectColorAdd + fragColor, 0.0, 1.0);
+		}
+		if (outColor.a < 0.0001) discard;
 	#else
 		vec3 normal = gsNormal;
 
@@ -221,117 +326,163 @@ void main(void) {
 			normal+= gsNormal * normalVector.z;
 		}
 
-		// compute lights
-		computeLights(normal, gsPosition);
-	#endif
+		// Metallic and Roughness material properties are packed together
+		// In glTF, these factors can be specified by fixed scalar values
+		// or from a metallic-roughness map
+		float perceptualRoughness = 0.0;
+		float metallic = 0.0;
+		vec4 baseColor = vec4(0.0, 0.0, 0.0, 1.0);
+		vec3 diffuseColor = vec3(0.0);
+		vec3 specularColor= vec3(0.0);
+		vec3 f0 = vec3(0.04);
 
-		// take effect colors into account
-	fragColor.a = material.diffuse.a * gsEffectColorMul.a;
-
-	#if defined(HAVE_DEPTH_FOG)
-		float fogStrength = 0.0;
-		if (fragDepth > FOG_DISTANCE_NEAR) {
-			fogStrength = (clamp(fragDepth, FOG_DISTANCE_NEAR, FOG_DISTANCE_MAX) - FOG_DISTANCE_NEAR) * 1.0 / (FOG_DISTANCE_MAX - FOG_DISTANCE_NEAR);
-		}
-	#endif
-
-	//
-	#if defined(HAVE_TERRAIN_SHADER)
-		if (fogStrength < 1.0) {
-			vec4 terrainBlending = vec4(0.0, 0.0, 0.0, 0.0); // gras, dirt, stone, snow
-
-			// height
-			if (height > TERRAIN_LEVEL_1) {
-				float blendFactorHeight = clamp((height - TERRAIN_LEVEL_1) / TERRAIN_HEIGHT_BLEND, 0.0, 1.0);
-				// 10+ meter
-				if (slope >= 45.0) {
-					terrainBlending[2]+= blendFactorHeight; // stone
-				} else
-				if (slope >= 45.0 - TERRAIN_SLOPE_BLEND) {
-					terrainBlending[2]+= blendFactorHeight * ((slope - (45.0 - TERRAIN_SLOPE_BLEND)) / TERRAIN_SLOPE_BLEND); // stone
-					terrainBlending[3]+= blendFactorHeight * (1.0 - (slope - (45.0 - TERRAIN_SLOPE_BLEND)) / TERRAIN_SLOPE_BLEND); // snow
-				} else {
-					terrainBlending[3]+= blendFactorHeight; // snow
-				}
-			}
-			if (height >= TERRAIN_LEVEL_0 && height < TERRAIN_LEVEL_1 + TERRAIN_HEIGHT_BLEND) {
-				float blendFactorHeight = 1.0;
-				if (height > TERRAIN_LEVEL_1) {
-					blendFactorHeight = 1.0 - clamp((height - TERRAIN_LEVEL_1) / TERRAIN_HEIGHT_BLEND, 0.0, 1.0);
-				} else
-				if (height < TERRAIN_LEVEL_0 + TERRAIN_HEIGHT_BLEND) {
-					blendFactorHeight = clamp((height - TERRAIN_LEVEL_0) / TERRAIN_HEIGHT_BLEND, 0.0, 1.0);
-				}
-
-				// 0..10 meter
-				if (slope >= 45.0) {
-					terrainBlending[2]+= blendFactorHeight; // stone
-				} else
-				if (slope >= 45.0 - TERRAIN_SLOPE_BLEND) {
-					terrainBlending[2]+= blendFactorHeight * ((slope - (45.0 - TERRAIN_SLOPE_BLEND)) / TERRAIN_SLOPE_BLEND); // stone
-					terrainBlending[1]+= blendFactorHeight * (1.0 - (slope - (45.0 - TERRAIN_SLOPE_BLEND)) / TERRAIN_SLOPE_BLEND); // dirt
-				} else
-				if (slope >= 26.0) {
-					terrainBlending[1]+= blendFactorHeight; // dirt
-				} else
-				if (slope >= 26.0 - TERRAIN_SLOPE_BLEND) {
-					terrainBlending[1]+= blendFactorHeight * ((slope - (26.0 - TERRAIN_SLOPE_BLEND)) / TERRAIN_SLOPE_BLEND); // dirt
-					terrainBlending[0]+= blendFactorHeight * (1.0 - (slope - (26.0 - TERRAIN_SLOPE_BLEND)) / TERRAIN_SLOPE_BLEND); // gras
-				} else {
-					terrainBlending[0]+= blendFactorHeight; // gras
-				}
-			}
-			if (height < TERRAIN_LEVEL_0 + TERRAIN_HEIGHT_BLEND) {
-				float blendFactorHeight = 1.0;
-				if (height > TERRAIN_LEVEL_0) {
-					blendFactorHeight = 1.0 - clamp((height - TERRAIN_LEVEL_0) / TERRAIN_HEIGHT_BLEND, 0.0, 1.0);
-				}
-				// 0- meter
-				terrainBlending[1]+= blendFactorHeight; // dirt
-			}
-
-			//
-			outColor = gsEffectColorAdd;
-			if (terrainBlending[0] > 0.001) outColor+= texture(grasTextureUnit, gsFragTextureUV) * terrainBlending[0];
-			if (terrainBlending[1] > 0.001) outColor+= texture(dirtTextureUnit, gsFragTextureUV) * terrainBlending[1];
-			if (terrainBlending[2] > 0.001) outColor+= texture(stoneTextureUnit, gsFragTextureUV) * terrainBlending[2];
-			if (terrainBlending[3] > 0.001) outColor+= texture(snowTextureUnit, gsFragTextureUV) * terrainBlending[3];
-			outColor*= fragColor;
-			outColor = clamp(outColor, 0.0, 1.0);
-			if (fogStrength > 0.0) {
-				outColor = vec4(
-					(outColor.rgb * (1.0 - fogStrength)) +
-					vec3(FOG_RED, FOG_GREEN, FOG_BLUE) * fogStrength,
-					1.0
-				);
-			}
+		if (specularTextureAvailable == 1) {
+			vec4 sgSample = SRGBtoLINEAR(texture(specularTextureUnit, gsFragTextureUV));
+			perceptualRoughness = (1.0 - sgSample.a * material.shininess); // glossiness to roughness
+			f0 = sgSample.rgb * material.specular.xyz; // specular
 		} else {
+			f0 = material.specular.xyz;
+			perceptualRoughness = 1.0 - material.shininess;
+		}
+
+		#if defined(HAVE_TERRAIN_SHADER)
+			int diffuseTextureAvailable = 1;
+			#if defined(HAVE_DEPTH_FOG)
+				if (fogStrength < 1.0) {
+			#else
+				{
+			#endif
+					vec4 terrainBlending = vec4(0.0, 0.0, 0.0, 0.0); // gras, dirt, stone, snow
+					if (height > TERRAIN_LEVEL_1) {
+						float blendFactorHeight = clamp((height - TERRAIN_LEVEL_1) / TERRAIN_HEIGHT_BLEND, 0.0, 1.0);
+						if (slope >= 45.0) {
+							terrainBlending[2]+= blendFactorHeight; // stone
+						} else
+						if (slope >= 45.0 - TERRAIN_SLOPE_BLEND) {
+							terrainBlending[2]+= blendFactorHeight * ((slope - (45.0 - TERRAIN_SLOPE_BLEND)) / TERRAIN_SLOPE_BLEND); // stone
+							terrainBlending[3]+= blendFactorHeight * (1.0 - (slope - (45.0 - TERRAIN_SLOPE_BLEND)) / TERRAIN_SLOPE_BLEND); // snow
+						} else {
+							terrainBlending[3]+= blendFactorHeight; // snow
+						}
+					}
+					if (height >= TERRAIN_LEVEL_0 && height < TERRAIN_LEVEL_1 + TERRAIN_HEIGHT_BLEND) {
+						float blendFactorHeight = 1.0;
+						if (height > TERRAIN_LEVEL_1) {
+							blendFactorHeight = 1.0 - clamp((height - TERRAIN_LEVEL_1) / TERRAIN_HEIGHT_BLEND, 0.0, 1.0);
+						} else
+						if (height < TERRAIN_LEVEL_0 + TERRAIN_HEIGHT_BLEND) {
+							blendFactorHeight = clamp((height - TERRAIN_LEVEL_0) / TERRAIN_HEIGHT_BLEND, 0.0, 1.0);
+						}
+
+						if (slope >= 45.0) {
+							terrainBlending[2]+= blendFactorHeight; // stone
+						} else
+						if (slope >= 45.0 - TERRAIN_SLOPE_BLEND) {
+							terrainBlending[2]+= blendFactorHeight * ((slope - (45.0 - TERRAIN_SLOPE_BLEND)) / TERRAIN_SLOPE_BLEND); // stone
+							terrainBlending[1]+= blendFactorHeight * (1.0 - (slope - (45.0 - TERRAIN_SLOPE_BLEND)) / TERRAIN_SLOPE_BLEND); // dirt
+						} else
+						if (slope >= 26.0) {
+							terrainBlending[1]+= blendFactorHeight; // dirt
+						} else
+						if (slope >= 26.0 - TERRAIN_SLOPE_BLEND) {
+							terrainBlending[1]+= blendFactorHeight * ((slope - (26.0 - TERRAIN_SLOPE_BLEND)) / TERRAIN_SLOPE_BLEND); // dirt
+							terrainBlending[0]+= blendFactorHeight * (1.0 - (slope - (26.0 - TERRAIN_SLOPE_BLEND)) / TERRAIN_SLOPE_BLEND); // gras
+						} else {
+							terrainBlending[0]+= blendFactorHeight; // gras
+						}
+					}
+					if (height < TERRAIN_LEVEL_0 + TERRAIN_HEIGHT_BLEND) {
+						float blendFactorHeight = 1.0;
+						if (height > TERRAIN_LEVEL_0) {
+							blendFactorHeight = 1.0 - clamp((height - TERRAIN_LEVEL_0) / TERRAIN_HEIGHT_BLEND, 0.0, 1.0);
+						}
+						// 0- meter
+						terrainBlending[1]+= blendFactorHeight; // dirt
+					}
+
+					//
+					baseColor = gsEffectColorAdd;
+					if (terrainBlending[0] > 0.001) baseColor+= texture(grasTextureUnit, gsFragTextureUV) * terrainBlending[0];
+					if (terrainBlending[1] > 0.001) baseColor+= texture(dirtTextureUnit, gsFragTextureUV) * terrainBlending[1];
+					if (terrainBlending[2] > 0.001) baseColor+= texture(stoneTextureUnit, gsFragTextureUV) * terrainBlending[2];
+					if (terrainBlending[3] > 0.001) baseColor+= texture(snowTextureUnit, gsFragTextureUV) * terrainBlending[3];
+					baseColor*= fragColor;
+					baseColor = clamp(outColor, 0.0, 1.0);
+			#if defined(HAVE_DEPTH_FOG)
+				} else {
+					baseColor = gsEffectColorAdd + vec4(FOG_RED, FOG_GREEN, FOG_BLUE, 1.0);
+				}
+			#else
+				}
+			#endif
+		#else
+			if (diffuseTextureAvailable == 1) {
+				baseColor = SRGBtoLINEAR(diffuseTextureColor) * material.diffuse;
+			} else {
+				baseColor = SRGBtoLINEAR(material.diffuse);
+			}
+		#endif
+
+	    // f0 = specular
+		specularColor = f0;
+		float oneMinusSpecularStrength = 1.0 - max(max(f0.r, f0.g), f0.b);
+		diffuseColor = baseColor.rgb * oneMinusSpecularStrength;
+
+	    // TODO: roughness map
+		metallic = 0;
+		perceptualRoughness = 0;
+
+		// TODO: albedo map
+
+	    diffuseColor = baseColor.rgb * (vec3(1.0) - f0) * (1.0 - metallic);
+
+		specularColor = mix(f0, baseColor.rgb, metallic);
+
+		perceptualRoughness = clamp(perceptualRoughness, 0.0, 1.0);
+		metallic = clamp(metallic, 0.0, 1.0);
+
+		// Roughness is authored as perceptual roughness; as is convention,
+		// convert to material roughness by squaring the perceptual roughness [2].
+		float alphaRoughness = perceptualRoughness * perceptualRoughness;
+
+	    // Compute reflectance.
+		float reflectance = max(max(specularColor.r, specularColor.g), specularColor.b);
+
+	    vec3 specularEnvironmentR0 = specularColor.rgb;
+	    // Anything less than 2% is physically impossible and is instead considered to be shadowing. Compare to "Real-Time-Rendering" 4th editon on page 325.
+	    vec3 specularEnvironmentR90 = vec3(clamp(reflectance * 50.0, 0.0, 1.0));
+
+		PBRMaterialInfo materialInfo = PBRMaterialInfo(
+			perceptualRoughness,
+			specularEnvironmentR0,
+			alphaRoughness,
+			diffuseColor,
+			specularEnvironmentR90,
+			specularColor
+	    );
+
+		// compute lights
+		computeLights(normal, gsPosition, materialInfo);
+
+		//
+		// take effect colors into account
+		fragColor.a = material.diffuse.a * gsEffectColorMul.a;
+		outColor = vec4(toneMap(fragColor.rgb), baseColor.a);
+	#endif
+
+	#if defined(HAVE_BACK)
+		gl_FragDepth = 1.0;
+	#endif
+	#if defined(HAVE_FRONT)
+		gl_FragDepth = 0.0;
+	#endif
+	#if defined(HAVE_DEPTH_FOG)
+		if (fogStrength > 0.0) {
 			outColor = vec4(
+				(outColor.rgb * (1.0 - fogStrength)) +
 				vec3(FOG_RED, FOG_GREEN, FOG_BLUE) * fogStrength,
 				1.0
 			);
 		}
-	#else
-		if (diffuseTextureAvailable == 1) {
-			outColor = clamp((gsEffectColorAdd + diffuseTextureColor) * fragColor, 0.0, 1.0);
-		} else {
-			outColor = clamp(gsEffectColorAdd + fragColor, 0.0, 1.0);
-		}
-		if (outColor.a < 0.0001) discard;
-		#if defined(HAVE_BACK)
-			gl_FragDepth = 1.0;
-		#endif
-		#if defined(HAVE_FRONT)
-			gl_FragDepth = 0.0;
-		#endif
-		#if defined(HAVE_DEPTH_FOG)
-			if (fogStrength > 0.0) {
-				outColor = vec4(
-					(outColor.rgb * (1.0 - fogStrength)) +
-					vec3(FOG_RED, FOG_GREEN, FOG_BLUE) * fogStrength,
-					1.0
-				);
-			}
-		#endif
 	#endif
 }
