@@ -4,7 +4,7 @@
 
 #define FALSE		0
 #define MAX_LIGHTS	8
-#define GAMMA		100.0
+#define GAMMA		2.0
 #define M_PI		3.141592653589793
 
 struct Material {
@@ -32,6 +32,7 @@ struct Light {
 uniform mat4 cameraMatrix;
 uniform Material material;
 uniform Light lights[MAX_LIGHTS];
+uniform vec3 cameraPosition;
 
 #if defined(HAVE_SOLID_SHADING)
 #else
@@ -76,8 +77,8 @@ vec4 fragColor;
 	#define TERRAIN_HEIGHT_BLEND		4.0
 	#define TERRAIN_SLOPE_BLEND			10.0
 
-	in float slope;
 	in float height;
+	in float slope;
 	uniform sampler2D grasTextureUnit;
 	uniform sampler2D dirtTextureUnit;
 	uniform sampler2D stoneTextureUnit;
@@ -214,37 +215,32 @@ vec4 fragColor;
 
 	void applyDirectionalLight(Light light, PBRMaterialInfo materialInfo, vec3 normal, vec3 view, vec3 position)
 	{
-		vec3 direction = light.position.xyz - position.xyz;
-	    vec3 pointToLight = -direction;
-	    vec3 shade = getPointShade(pointToLight, materialInfo, normal, view);
-	    // return light.intensity * light.color * shade;
+	    vec3 shade = getPointShade(-light.spotDirection, materialInfo, normal, view);
 	    fragColor+= light.diffuse * vec4(shade, 1.0);
 	}
 
-	/*
-	vec3 applyPointLight(Light light, PBRMaterialInfo materialInfo, vec3 normal, vec3 view)
-	{
-	    vec3 pointToLight = light.position - v_Position;
-	    float distance = length(pointToLight);
-	    float attenuation = getRangeAttenuation(light.range, distance);
-	    vec3 shade = getPointShade(pointToLight, materialInfo, normal, view);
-	    return attenuation * light.intensity * light.color * shade;
-	}
+//	vec3 applyPointLight(Light light, PBRMaterialInfo materialInfo, vec3 normal, vec3 view)
+//	{
+//	    vec3 pointToLight = light.position - v_Position;
+//	    float distance = length(pointToLight);
+//	    float attenuation = getRangeAttenuation(light.range, distance);
+//	    vec3 shade = getPointShade(pointToLight, materialInfo, normal, view);
+//	    return attenuation * light.intensity * light.color * shade;
+//	}
+//
+//	vec3 applySpotLight(Light light, PBRMaterialInfo materialInfo, vec3 normal, vec3 view)
+//	{
+//	    vec3 pointToLight = light.position - v_Position;
+//	    float distance = length(pointToLight);
+//	    float rangeAttenuation = getRangeAttenuation(light.range, distance);
+//	    float spotAttenuation = getSpotAttenuation(pointToLight, light.direction, light.outerConeCos, light.innerConeCos);
+//	    vec3 shade = getPointShade(pointToLight, materialInfo, normal, view);
+//	    return rangeAttenuation * spotAttenuation * light.intensity * light.color * shade;
+//	}
 
-	vec3 applySpotLight(Light light, PBRMaterialInfo materialInfo, vec3 normal, vec3 view)
-	{
-	    vec3 pointToLight = light.position - v_Position;
-	    float distance = length(pointToLight);
-	    float rangeAttenuation = getRangeAttenuation(light.range, distance);
-	    float spotAttenuation = getSpotAttenuation(pointToLight, light.direction, light.outerConeCos, light.innerConeCos);
-	    vec3 shade = getPointShade(pointToLight, materialInfo, normal, view);
-	    return rangeAttenuation * spotAttenuation * light.intensity * light.color * shade;
-	}
-	*/
-
-	void computeLights(in vec3 normal, in vec3 position, PBRMaterialInfo materialInfo) {
+	void computeDiffuseLights(in vec3 normal, in vec3 position, PBRMaterialInfo materialInfo) {
 	    //
-		vec3 view = normalize(vec3(cameraMatrix[3][0], cameraMatrix[3][1], cameraMatrix[3][2]) - position);
+		vec3 view = normalize(cameraPosition - position);
 
 		// process each light
 		for (int i = 0; i < MAX_LIGHTS; i++) {
@@ -258,9 +254,22 @@ vec4 fragColor;
 		}
 	}
 
+	void computeAmbientLights(int diffuseTextureAvailable, vec4 diffuseTextureColor) {
+		// process each light
+		for (int i = 0; i < MAX_LIGHTS; i++) {
+			Light light = lights[i];
+
+			// skip on disabled lights
+			if (light.enabled == FALSE) continue;
+
+			//
+			fragColor = clamp(SRGBtoLINEAR(light.ambient) * SRGBtoLINEAR(material.ambient) * SRGBtoLINEAR((diffuseTextureAvailable == 1?diffuseTextureColor:vec4(1.0))), 0.0, 1.0);
+		}
+	}
+
 	vec3 toneMap(vec3 color)
 	{
-		return pow(color, vec3(1.0 / GAMMA));
+		return pow(color, vec3(1.0 / GAMMA)) * 4.0;
 	}
 
 #endif
@@ -276,6 +285,8 @@ void main(void) {
 	// retrieve diffuse texture color value
 	#if defined(HAVE_TERRAIN_SHADER)
 		// no op
+		int diffuseTextureAvailable = 1;
+		vec4 diffuseTextureColor;
 	#else
 		vec4 diffuseTextureColor;
 		if (diffuseTextureAvailable == 1) {
@@ -333,20 +344,19 @@ void main(void) {
 		float metallic = 0.0;
 		vec4 baseColor = vec4(0.0, 0.0, 0.0, 1.0);
 		vec3 diffuseColor = vec3(0.0);
-		vec3 specularColor= vec3(0.0);
+		vec3 specularColor = vec3(0.0);
 		vec3 f0 = vec3(0.04);
 
 		if (specularTextureAvailable == 1) {
 			vec4 sgSample = SRGBtoLINEAR(texture(specularTextureUnit, gsFragTextureUV));
 			perceptualRoughness = (1.0 - sgSample.a * material.shininess); // glossiness to roughness
-			f0 = sgSample.rgb * material.specular.xyz; // specular
+			f0 = sgSample.rgb * SRGBtoLINEAR(material.specular).xyz; // specular
 		} else {
-			f0 = material.specular.xyz;
-			perceptualRoughness = 1.0 - material.shininess;
+			f0 = SRGBtoLINEAR(material.specular).rgb;
+			perceptualRoughness = 1.0 - material.shininess / 127.0;
 		}
 
 		#if defined(HAVE_TERRAIN_SHADER)
-			int diffuseTextureAvailable = 1;
 			#if defined(HAVE_DEPTH_FOG)
 				if (fogStrength < 1.0) {
 			#else
@@ -401,25 +411,24 @@ void main(void) {
 					}
 
 					//
-					baseColor = gsEffectColorAdd;
-					if (terrainBlending[0] > 0.001) baseColor+= texture(grasTextureUnit, gsFragTextureUV) * terrainBlending[0];
-					if (terrainBlending[1] > 0.001) baseColor+= texture(dirtTextureUnit, gsFragTextureUV) * terrainBlending[1];
-					if (terrainBlending[2] > 0.001) baseColor+= texture(stoneTextureUnit, gsFragTextureUV) * terrainBlending[2];
-					if (terrainBlending[3] > 0.001) baseColor+= texture(snowTextureUnit, gsFragTextureUV) * terrainBlending[3];
-					baseColor*= fragColor;
-					baseColor = clamp(outColor, 0.0, 1.0);
+					diffuseTextureColor = gsEffectColorAdd;
+					if (terrainBlending[0] > 0.001) diffuseTextureColor+= texture(grasTextureUnit, gsFragTextureUV) * terrainBlending[0];
+					if (terrainBlending[1] > 0.001) diffuseTextureColor+= texture(dirtTextureUnit, gsFragTextureUV) * terrainBlending[1];
+					if (terrainBlending[2] > 0.001) diffuseTextureColor+= texture(stoneTextureUnit, gsFragTextureUV) * terrainBlending[2];
+					if (terrainBlending[3] > 0.001) diffuseTextureColor+= texture(snowTextureUnit, gsFragTextureUV) * terrainBlending[3];
+					diffuseTextureColor = clamp(diffuseTextureColor, 0.0, 1.0);
 			#if defined(HAVE_DEPTH_FOG)
 				} else {
-					baseColor = gsEffectColorAdd + vec4(FOG_RED, FOG_GREEN, FOG_BLUE, 1.0);
+					diffuseTextureColor = gsEffectColorAdd + vec4(FOG_RED, FOG_GREEN, FOG_BLUE, 1.0);
 				}
 			#else
 				}
 			#endif
 		#else
 			if (diffuseTextureAvailable == 1) {
-				baseColor = SRGBtoLINEAR(diffuseTextureColor) * material.diffuse;
+				baseColor = gsEffectColorAdd + SRGBtoLINEAR(diffuseTextureColor) * SRGBtoLINEAR(material.diffuse);
 			} else {
-				baseColor = SRGBtoLINEAR(material.diffuse);
+				baseColor = gsEffectColorAdd + SRGBtoLINEAR(material.diffuse);
 			}
 		#endif
 
@@ -429,12 +438,8 @@ void main(void) {
 		diffuseColor = baseColor.rgb * oneMinusSpecularStrength;
 
 	    // TODO: roughness map
-		metallic = 0;
-		perceptualRoughness = 0;
 
-		// TODO: albedo map
-
-	    diffuseColor = baseColor.rgb * (vec3(1.0) - f0) * (1.0 - metallic);
+		diffuseColor = baseColor.rgb * (vec3(1.0) - f0) * (1.0 - metallic);
 
 		specularColor = mix(f0, baseColor.rgb, metallic);
 
@@ -462,7 +467,8 @@ void main(void) {
 	    );
 
 		// compute lights
-		computeLights(normal, gsPosition, materialInfo);
+		computeAmbientLights(diffuseTextureAvailable, diffuseTextureColor); // TODO: replace me with env ambient component
+		computeDiffuseLights(normal, gsPosition, materialInfo);
 
 		//
 		// take effect colors into account

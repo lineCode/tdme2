@@ -738,8 +738,8 @@ void LevelEditorView::initialize()
 	levelEditorScreenController->setLightPresetsIds(LevelPropertyPresets::getInstance()->getLightPresets());
 	updateGUIElements();
 	auto light0 = engine->getLightAt(0);
-	light0->setAmbient(Color4(1.0f, 1.0f, 1.0f, 1.0f));
-	light0->setDiffuse(Color4(1.0f, 1.0f, 1.0f, 1.0f));
+	light0->setAmbient(Color4(0.5f, 0.5f, 0.5f, 0.5f));
+	light0->setDiffuse(Color4(0.5f, 0.5f, 0.5f, 1.0f));
 	light0->setPosition(Vector4(0.0f, 20.0f, 0.0f, 1.0f));
 	light0->setEnabled(true);
 	auto cam = engine->getCamera();

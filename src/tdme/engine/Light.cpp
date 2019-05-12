@@ -1,7 +1,5 @@
 #include <tdme/engine/Light.h>
 
-#include <string>
-
 #include <tdme/engine/model/Color4.h>
 #include <tdme/engine/subsystems/renderer/Renderer.h>
 #include <tdme/math/Matrix4x4.h>
@@ -59,9 +57,15 @@ void Light::update()
 		renderer->setLightEnabled(id);
 		renderer->setLightAmbient(id, ambient.getArray());
 		renderer->setLightDiffuse(id, diffuse.getArray());
-		renderer->setLightPosition(id, renderer->getCameraMatrix().multiply(position, lightPositionTransformed).scale(Math::abs(lightPositionTransformed.getW()) < Math::EPSILON?1.0f:1.0f / lightPositionTransformed.getW()).setW(1.0f).getArray());
-		renderer->getCameraMatrix().multiply(spotDirection4.set(spotDirection, 0.0f), spotDirection4Transformed);
-		renderer->setLightSpotDirection(id, tmpVector3.set(spotDirection4Transformed.getX(), spotDirection4Transformed.getY(), spotDirection4Transformed.getZ()).getArray());
+		if (renderer->isInstancedRenderingAvailable() == false) {
+			renderer->setLightPosition(id, renderer->getCameraMatrix().multiply(position, lightPositionTransformed).scale(Math::abs(lightPositionTransformed.getW()) < Math::EPSILON?1.0f:1.0f / lightPositionTransformed.getW()).setW(1.0f).getArray());
+			renderer->getCameraMatrix().multiply(spotDirection4.set(spotDirection, 0.0f), spotDirection4Transformed);
+			renderer->setLightSpotDirection(id, tmpVector3.set(spotDirection4Transformed.getX(), spotDirection4Transformed.getY(), spotDirection4Transformed.getZ()).getArray());
+		} else {
+			// TODO: a.drewke, check if we can always use world space here or camera space
+			renderer->setLightPosition(id, position.getArray());
+			renderer->setLightSpotDirection(id, spotDirection.getArray());
+		}
 		renderer->setLightSpotExponent(id, spotExponent);
 		renderer->setLightSpotCutOff(id, spotCutOff);
 		renderer->setLightConstantAttenuation(id, constantAttenuation);

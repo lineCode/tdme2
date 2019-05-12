@@ -17,7 +17,7 @@ class tdme::engine::EngineVKRenderer: public VKRenderer
 public:
 	// overriden methods
 	void onUpdateProjectionMatrix() override;
-	void onUpdateCameraMatrix() override;
+	void onUpdateCamera() override;
 	void onUpdateModelViewMatrix() override;
 	void onBindTexture(int32_t textureId) override;
 	void onUpdateTextureMatrix() override;

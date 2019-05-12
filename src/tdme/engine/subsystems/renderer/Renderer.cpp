@@ -59,6 +59,10 @@ Matrix4x4& Renderer::getProjectionMatrix()
 	return projectionMatrix;
 }
 
+Vector3& Renderer::getCameraPosition() {
+	return cameraPosition;
+}
+
 Matrix4x4& Renderer::getCameraMatrix()
 {
 	return cameraMatrix;

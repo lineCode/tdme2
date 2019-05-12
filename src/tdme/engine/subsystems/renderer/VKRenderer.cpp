@@ -1502,7 +1502,7 @@ int VKRenderer::determineAlignment(const unordered_map<string, vector<string>>& 
 		auto arraySize = 1;
 		if (t.hasMoreTokens() == true) uniformType = t.nextToken();
 		while (t.hasMoreTokens() == true) uniformName = t.nextToken();
-		if (uniformName.find('[') != -1 && uniformName.find(']') != -1) {
+		if (uniformName.find('[') != string::npos && uniformName.find(']') != string::npos) {
 			uniformName = StringUtils::substring(uniformName, 0, uniformName.find('['));
 		}
 		if (uniformType == "int") {
@@ -1558,7 +1558,7 @@ bool VKRenderer::addToShaderUniformBufferObject(shader_type& shader, const unord
 		auto arraySize = 1;
 		if (t.hasMoreTokens() == true) uniformType = t.nextToken();
 		while (t.hasMoreTokens() == true) uniformName = t.nextToken();
-		if (uniformName.find('[') != -1 && uniformName.find(']') != -1) {
+		if (uniformName.find('[') != string::npos && uniformName.find(']') != string::npos) {
 			isArray = true;
 			auto arraySizeString = StringUtils::substring(uniformName, uniformName.find('[') + 1, uniformName.find(']'));
 			for (auto definitionValueIt: definitionValues) arraySizeString = StringUtils::replace(arraySizeString, definitionValueIt.first, definitionValueIt.second);
@@ -1691,7 +1691,7 @@ int32_t VKRenderer::loadShader(int32_t type, const string& pathName, const strin
 			for (auto matchedDefinition: matchedDefinitions) matchedAllDefinitions&= matchedDefinition;
 			auto line = StringUtils::trim(t.nextToken());
 			if (StringUtils::startsWith(line, "//") == true) continue;
-			auto position = -1;
+			auto position = string::npos;
 			if (StringUtils::startsWith(line, "/*") == true) {
 				multiLineComment = true;
 			} else
@@ -1699,7 +1699,7 @@ int32_t VKRenderer::loadShader(int32_t type, const string& pathName, const strin
 				if (StringUtils::endsWith(line, "*/") == true) multiLineComment = false;
 			} else
 			if (StringUtils::startsWith(line, "#if defined(") == true) {
-				auto definition = StringUtils::trim(StringUtils::substring(line, string("#if defined(").size(), (position = line.find(")")) != -1?position:line.size()));
+				auto definition = StringUtils::trim(StringUtils::substring(line, string("#if defined(").size(), (position = line.find(")")) != string::npos?position:line.size()));
 				if (VERBOSE == true) Console::println("VKRenderer::" + string(__FUNCTION__) + "(): Have preprocessor test begin: " + definition);
 				testedDefinitions.push(definition);
 				bool matched = false;
@@ -1715,7 +1715,7 @@ int32_t VKRenderer::loadShader(int32_t type, const string& pathName, const strin
 			} else
 			if (StringUtils::startsWith(line, "#define ") == true) {
 				auto definition = StringUtils::trim(StringUtils::substring(line, string("#define ").size()));
-				if (definition.find(' ') != -1 || definition.find('\t') != -1) {
+				if (definition.find(' ') != string::npos || definition.find('\t') != string::npos) {
 					t2.tokenize(definition, "\t ");
 					definition = t2.nextToken();
 					string value;
@@ -1760,7 +1760,7 @@ int32_t VKRenderer::loadShader(int32_t type, const string& pathName, const strin
 				}
 				if ((StringUtils::startsWith(line, "uniform ")) == true) {
 					string uniform;
-					if (line.find("sampler2D") != -1) {
+					if (line.find("sampler2D") != string::npos) {
 						uniform = StringUtils::substring(line, string("uniform").size() + 1);
 						t2.tokenize(uniform, "\t ;");
 						string uniformType;
@@ -1787,7 +1787,7 @@ int32_t VKRenderer::loadShader(int32_t type, const string& pathName, const strin
 					if (VERBOSE == true) Console::println("layout (location = " + to_string(inLocationCount) + ") " + line);
 					inLocationCount++;
 				} else
-				if (StringUtils::startsWith(line, "layout") == true && line.find("binding=") != -1) {
+				if (StringUtils::startsWith(line, "layout") == true && line.find("binding=") != string::npos) {
 					if (VERBOSE == true) Console::println("VKRenderer::" + string(__FUNCTION__) + "(): Have layout with binding: " + line);
 					t2.tokenize(line, "(,)= \t");
 					while (t2.hasMoreTokens() == true) {
@@ -1830,7 +1830,7 @@ int32_t VKRenderer::loadShader(int32_t type, const string& pathName, const strin
 		// inject uniform before first method
 		for (auto i = 0; i < newShaderSourceLines.size(); i++) {
 			auto line = newShaderSourceLines[i];
-			if (line.find('(') != -1 && line.find(')') != -1 && StringUtils::startsWith(line, "layout") == false && line.find("defined(") == -1 && line.find("#define") == -1) {
+			if (line.find('(') != string::npos && line.find(')') != string::npos && StringUtils::startsWith(line, "layout") == false && line.find("defined(") == string::npos && line.find("#define") == string::npos) {
 				injectedUniformsAt = i;
 				break;
 			}

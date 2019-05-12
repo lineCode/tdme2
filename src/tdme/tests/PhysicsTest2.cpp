@@ -83,7 +83,7 @@ void PhysicsTest2::initialize()
 	cam->setLookAt(Vector3(0.0f, 0.0f, 0.0f));
 	cam->setUpVector(cam->computeUpVector(cam->getLookFrom(), cam->getLookAt()));
 	auto light0 = engine->getLightAt(0);
-	light0->setAmbient(Color4(1.0f, 1.0f, 1.0f, 1.0f));
+	light0->setAmbient(Color4(0.5f, 0.5f, 0.5f, 1.0f));
 	light0->setDiffuse(Color4(0.5f, 0.5f, 0.5f, 1.0f));
 	light0->setSpecular(Color4(1.0f, 1.0f, 1.0f, 1.0f));
 	light0->setPosition(Vector4(0.0f, 20000.0f, 0.0f, 1.0f));
@@ -96,8 +96,8 @@ void PhysicsTest2::initialize()
 	light0->setEnabled(true);
 	auto ground = new OrientedBoundingBox(Vector3(0.0f, 0.0f, 0.0f), OrientedBoundingBox::AABB_AXIS_X, OrientedBoundingBox::AABB_AXIS_Y, OrientedBoundingBox::AABB_AXIS_Z, Vector3(30.0f, 1.0f, 30.0f));
 	auto groundModel = PrimitiveModel::createModel(ground, "ground_model");
-	(*groundModel->getMaterials())["tdme.primitive.material"]->setAmbientColor(Color4(0.8f, 0.8f, 0.8f, 1.0f));
-	(*groundModel->getMaterials())["tdme.primitive.material"]->setDiffuseColor(Color4(1.0f, 1.0f, 1.0f, 1.0f));
+	(*groundModel->getMaterials())["tdme.primitive.material"]->setAmbientColor(Color4(0.4f, 0.4f, 0.4f, 1.0f));
+	(*groundModel->getMaterials())["tdme.primitive.material"]->setDiffuseColor(Color4(0.5f, 0.5f, 0.5f, 1.0f));
 	entity = new Object3D("ground", groundModel);
 	entity->setTranslation(Vector3(0.0f, -1.0f, 0.0f));
 	entity->update();
@@ -105,8 +105,8 @@ void PhysicsTest2::initialize()
 	world->addStaticRigidBody("ground", true, RIGID_TYPEID_STANDARD, entity->getTransformations(), 0.5f, {ground});
 	auto box = new OrientedBoundingBox(Vector3(0.0f, 0.0f, 0.0f), OrientedBoundingBox::AABB_AXIS_X, OrientedBoundingBox::AABB_AXIS_Y, OrientedBoundingBox::AABB_AXIS_Z, Vector3(1.0f, 1.0f, 1.0f));
 	auto boxModel = PrimitiveModel::createModel(box, "box_model");
-	(*boxModel->getMaterials())["tdme.primitive.material"]->setAmbientColor(Color4(0.8f, 0.5f, 0.5f, 1.0f));
-	(*boxModel->getMaterials())["tdme.primitive.material"]->setDiffuseColor(Color4(1.0f, 0.0f, 0.0f, 1.0f));
+	(*boxModel->getMaterials())["tdme.primitive.material"]->setAmbientColor(Color4(0.4f, 0.25f, 0.25f, 1.0f));
+	(*boxModel->getMaterials())["tdme.primitive.material"]->setDiffuseColor(Color4(0.5f, 0.0f, 0.0f, 1.0f));
 	for (auto i = 0; i < BOX_COUNT; i++) {
 		entity = new Object3D("box" + to_string(i), boxModel);
 		entity->setDynamicShadowingEnabled(true);

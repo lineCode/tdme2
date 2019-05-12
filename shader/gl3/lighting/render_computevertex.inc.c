@@ -1,8 +1,8 @@
 void computeVertex(vec4 vertex, int inArrayIndex, mat4 shaderTransformMatrix) {
 	// transformations matrices
-	mat4 mvMatrix = cameraMatrix * GS_IN_ARRAY_AT(vsModelMatrix, inArrayIndex) * shaderTransformMatrix;
+	mat4 mMatrix = GS_IN_ARRAY_AT(vsModelMatrix, inArrayIndex) * shaderTransformMatrix;
 	mat4 mvpMatrix = projectionMatrix * cameraMatrix * GS_IN_ARRAY_AT(vsModelMatrix, inArrayIndex) * shaderTransformMatrix;
-	mat4 normalMatrix = mat4(transpose(inverse(mat3(cameraMatrix * GS_IN_ARRAY_AT(vsModelMatrix, inArrayIndex) * shaderTransformMatrix))));
+	mat4 normalMatrix = mat4(transpose(inverse(mat3(GS_IN_ARRAY_AT(vsModelMatrix, inArrayIndex) * shaderTransformMatrix))));
 
 	// texure UV
 	gsFragTextureUV = vec2(textureMatrix * vec3(GS_IN_ARRAY_AT(vsFragTextureUV, inArrayIndex), 1.0));
@@ -24,7 +24,7 @@ void computeVertex(vec4 vertex, int inArrayIndex, mat4 shaderTransformMatrix) {
 	gsEffectColorAdd = GS_IN_ARRAY_AT(vsEffectColorAdd, inArrayIndex);
 
 	// gl position
-	vec4 gsPosition4 = mvMatrix * vertex;
-	gl_Position = mvpMatrix * vertex;
+	vec4 gsPosition4 = mMatrix * vertex;
 	gsPosition = gsPosition4.xyz / gsPosition4.w;
+	gl_Position = mvpMatrix * vertex;
 }

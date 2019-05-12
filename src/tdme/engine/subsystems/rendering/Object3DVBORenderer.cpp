@@ -636,7 +636,7 @@ void Object3DVBORenderer::renderObjectsOfSameTypeInstanced(const vector<Object3D
 				renderer->setShader(currentShader);
 				renderer->onUpdateShader();
 				// issue upload matrices
-				renderer->onUpdateCameraMatrix();
+				renderer->onUpdateCamera();
 				renderer->onUpdateProjectionMatrix();
 				// update lights
 				for (auto j = 0; j < engine->lights.size(); j++) {

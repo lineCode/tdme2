@@ -30,7 +30,7 @@ void EngineGLES2Renderer::onUpdateProjectionMatrix()
 
 }
 
-void EngineGLES2Renderer::onUpdateCameraMatrix()
+void EngineGLES2Renderer::onUpdateCamera()
 {
 	if (Engine::lightingShader != nullptr)
 		Engine::lightingShader->updateMatrices(this);

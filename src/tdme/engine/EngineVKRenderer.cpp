@@ -31,7 +31,7 @@ void EngineVKRenderer::onUpdateProjectionMatrix()
 
 }
 
-void EngineVKRenderer::onUpdateCameraMatrix()
+void EngineVKRenderer::onUpdateCamera()
 {
 	if (Engine::lightingShader != nullptr)
 		Engine::lightingShader->updateMatrices(this);

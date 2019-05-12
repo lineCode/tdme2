@@ -31,7 +31,7 @@ void EngineGL3Renderer::onUpdateProjectionMatrix()
 
 }
 
-void EngineGL3Renderer::onUpdateCameraMatrix()
+void EngineGL3Renderer::onUpdateCamera()
 {
 	if (Engine::lightingShader != nullptr)
 		Engine::lightingShader->updateMatrices(this);

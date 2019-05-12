@@ -220,8 +220,8 @@ void EngineTest::initialize()
 	if (osEngine == nullptr) {
 		osEngine = Engine::createOffScreenInstance(512, 512);
 		auto osLight0 = osEngine->getLightAt(0);
-		osLight0->setAmbient(Color4(1.0f, 1.0f, 1.0f, 1.0f));
-		osLight0->setDiffuse(Color4(1.0f, 1.0f, 1.0f, 1.0f));
+		osLight0->setAmbient(Color4(0.5f, 0.5f, 0.5f, 1.0f));
+		osLight0->setDiffuse(Color4(0.5f, 0.5f, 0.5f, 1.0f));
 		osLight0->setPosition(Vector4(0.0f, -4.0f, -4.0f, 1.0f));
 		osLight0->setSpotDirection(Vector3(osLight0->getPosition().getX(), osLight0->getPosition().getY(), osLight0->getPosition().getZ()).sub(Vector3(0.0f, 0.0f, 0.0f)));
 		osLight0->setEnabled(true);
