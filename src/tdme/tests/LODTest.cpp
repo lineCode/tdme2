@@ -101,8 +101,8 @@ void LODTest::initialize()
 	cam->setLookAt(Vector3(0.0f, 2.5f, 0.0f));
 	cam->setUpVector(cam->computeUpVector(cam->getLookFrom(), cam->getLookAt()));
 	auto light0 = engine->getLightAt(0);
-	light0->setAmbient(Color4(0.5f, 0.5f, 0.5f, 1.0f));
-	light0->setDiffuse(Color4(0.5f, 0.5f, 0.5f, 1.0f));
+	light0->setAmbient(Color4(1.0f, 1.0f, 1.0f, 1.0f));
+	light0->setDiffuse(Color4(1.0f, 1.0f, 1.0f, 1.0f));
 	light0->setSpecular(Color4(1.0f, 1.0f, 1.0f, 1.0f));
 	light0->setPosition(Vector4(0.0f, 20000.0f, 0.0f, 1.0f));
 	light0->setSpotDirection(Vector3(0.0f, 0.0f, 0.0f).sub(Vector3(light0->getPosition().getX(), light0->getPosition().getY(), light0->getPosition().getZ())));

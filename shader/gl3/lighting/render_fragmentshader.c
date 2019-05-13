@@ -269,7 +269,7 @@ vec4 fragColor;
 
 	vec3 toneMap(vec3 color)
 	{
-		return pow(color, vec3(1.0 / GAMMA)) * 4.0;
+		return pow(color, vec3(1.0 / GAMMA)) * 2.0;
 	}
 
 #endif

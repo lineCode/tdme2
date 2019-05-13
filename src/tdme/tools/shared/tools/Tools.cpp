@@ -179,8 +179,8 @@ int32_t Tools::convertToIntSilent(const string& text)
 
 void Tools::setDefaultLight(Light* light)
 {
-	light->setAmbient(Color4(0.5f, 0.5f, 0.5f, 1.0f));
-	light->setDiffuse(Color4(0.5f, 0.5f, 0.5f, 1.0f));
+	light->setAmbient(Color4(1.0f, 1.0f, 1.0f, 1.0f));
+	light->setDiffuse(Color4(1.0f, 1.0f, 1.0f, 1.0f));
 	light->setSpecular(Color4(1.0f, 1.0f, 1.0f, 1.0f));
 	light->setPosition(Vector4(0.0f, 20000.0f, 0.0f, 1.0f));
 	light->setSpotDirection(Vector3(0.0f, 0.0f, 0.0f).sub(Vector3(light->getPosition().getX(), light->getPosition().getY(), light->getPosition().getZ())));
@@ -360,8 +360,8 @@ void Tools::setupEntity(LevelEditorEntity* entity, Engine* engine, const Transfo
 	// lights
 	for (auto lightIdx = 0; lightIdx < engine->getLightCount(); lightIdx++) engine->getLightAt(lightIdx)->setEnabled(false);
 	auto light0 = engine->getLightAt(0);
-	light0->setAmbient(Color4(0.5f, 0.5f, 0.5f, 1.0f));
-	light0->setDiffuse(Color4(0.5f, 0.5f, 0.5f, 1.0f));
+	light0->setAmbient(Color4(1.0f, 1.0f, 1.0f, 1.0f));
+	light0->setDiffuse(Color4(1.0f, 1.0f, 1.0f, 1.0f));
 	light0->setSpecular(Color4(1.0f, 1.0f, 1.0f, 1.0f));
 	light0->setPosition(
 		Vector4(

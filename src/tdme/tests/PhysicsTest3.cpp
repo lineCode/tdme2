@@ -133,8 +133,8 @@ void PhysicsTest3::initialize()
 	cam->setLookAt(Vector3(0.0f, 0.0f, 0.0f));
 	cam->setUpVector(cam->computeUpVector(cam->getLookFrom(), cam->getLookAt()));
 	auto light0 = engine->getLightAt(0);
-	light0->setAmbient(Color4(0.5f, 0.5f, 0.5f, 1.0f));
-	light0->setDiffuse(Color4(0.5f, 0.5f, 0.5f, 1.0f));
+	light0->setAmbient(Color4(1.0f, 1.0f, 1.0f, 1.0f));
+	light0->setDiffuse(Color4(1.0f, 1.0f, 1.0f, 1.0f));
 	light0->setSpecular(Color4(1.0f, 1.0f, 1.0f, 1.0f));
 	light0->setPosition(Vector4(0.0f, 20000.0f, 0.0f, 1.0f));
 	light0->setSpotDirection(Vector3(0.0f, 0.0f, 0.0f).sub(Vector3(light0->getPosition().getX(), light0->getPosition().getY(), light0->getPosition().getZ())));
@@ -239,7 +239,6 @@ void PhysicsTest3::initialize()
 		entity = new Object3D("terrain", _terrainModel);
 		entity->setTranslation(Vector3(0.0f, -4.0f, 0.0f));
 		entity->setScale(Vector3(2.0f, 2.0f, 1.0f));
-		entity->setShader("terrain");
 		entity->update();
 		engine->addEntity(entity);
 		Object3DModel terrainModel(_terrainModel);
