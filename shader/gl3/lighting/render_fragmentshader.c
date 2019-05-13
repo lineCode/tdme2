@@ -263,7 +263,7 @@ vec4 fragColor;
 			if (light.enabled == FALSE) continue;
 
 			//
-			fragColor = clamp(SRGBtoLINEAR(light.ambient) * SRGBtoLINEAR(material.ambient) * SRGBtoLINEAR((diffuseTextureAvailable == 1?diffuseTextureColor:vec4(1.0))), 0.0, 1.0);
+			fragColor = SRGBtoLINEAR(light.ambient) * SRGBtoLINEAR(material.ambient) * SRGBtoLINEAR((diffuseTextureAvailable == 1?diffuseTextureColor:vec4(1.0)));;
 		}
 	}
 
@@ -419,18 +419,19 @@ void main(void) {
 					diffuseTextureColor = clamp(diffuseTextureColor, 0.0, 1.0);
 			#if defined(HAVE_DEPTH_FOG)
 				} else {
-					diffuseTextureColor = gsEffectColorAdd + vec4(FOG_RED, FOG_GREEN, FOG_BLUE, 1.0);
+					diffuseTextureColor = vec4(FOG_RED, FOG_GREEN, FOG_BLUE, 1.0);
 				}
 			#else
 				}
 			#endif
-		#else
-			if (diffuseTextureAvailable == 1) {
-				baseColor = gsEffectColorAdd + SRGBtoLINEAR(diffuseTextureColor) * SRGBtoLINEAR(material.diffuse);
-			} else {
-				baseColor = gsEffectColorAdd + SRGBtoLINEAR(material.diffuse);
-			}
 		#endif
+
+		//
+		if (diffuseTextureAvailable == 1) {
+			baseColor = SRGBtoLINEAR(gsEffectColorAdd) + SRGBtoLINEAR(diffuseTextureColor) * SRGBtoLINEAR(material.diffuse);
+		} else {
+			baseColor = SRGBtoLINEAR(gsEffectColorAdd) + SRGBtoLINEAR(material.diffuse);
+		}
 
 	    // f0 = specular
 		specularColor = f0;
@@ -473,7 +474,7 @@ void main(void) {
 		//
 		// take effect colors into account
 		fragColor.a = material.diffuse.a * gsEffectColorMul.a;
-		outColor = vec4(toneMap(fragColor.rgb), baseColor.a);
+		outColor = vec4(toneMap(fragColor.rgb), fragColor.a);
 	#endif
 
 	#if defined(HAVE_BACK)
