@@ -254,7 +254,7 @@ vec4 fragColor;
 		}
 	}
 
-	void computeAmbientLights(int diffuseTextureAvailable, vec4 diffuseTextureColor) {
+	void computeAmbientLights(int _diffuseTextureAvailable, vec4 diffuseTextureColor) {
 		// process each light
 		for (int i = 0; i < MAX_LIGHTS; i++) {
 			Light light = lights[i];
@@ -263,7 +263,7 @@ vec4 fragColor;
 			if (light.enabled == FALSE) continue;
 
 			//
-			fragColor = SRGBtoLINEAR(light.ambient) * SRGBtoLINEAR(material.ambient) * SRGBtoLINEAR((diffuseTextureAvailable == 1?diffuseTextureColor:vec4(1.0)));;
+			fragColor = SRGBtoLINEAR(light.ambient) * SRGBtoLINEAR(material.ambient) * SRGBtoLINEAR((_diffuseTextureAvailable == 1?diffuseTextureColor:vec4(1.0)));;
 		}
 	}
 

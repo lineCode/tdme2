@@ -1829,8 +1829,15 @@ int32_t VKRenderer::loadShader(int32_t type, const string& pathName, const strin
 		auto injectedYFlip = false;
 		// inject uniform before first method
 		for (auto i = 0; i < newShaderSourceLines.size(); i++) {
-			auto line = newShaderSourceLines[i];
-			if (line.find('(') != string::npos && line.find(')') != string::npos && StringUtils::startsWith(line, "layout") == false && line.find("defined(") == string::npos && line.find("#define") == string::npos) {
+			auto line = StringUtils::trim(newShaderSourceLines[i]);
+			auto commentStartPositionIdx = line.find("//");
+			if (commentStartPositionIdx == string::npos) commentStartPositionIdx = 1000000;
+			auto tmpPositionIdx = string::npos;
+			if (((tmpPositionIdx = line.find("(")) != string::npos && tmpPositionIdx < commentStartPositionIdx) &&
+				((tmpPositionIdx = line.find(")")) != string::npos && tmpPositionIdx < commentStartPositionIdx) &&
+				((tmpPositionIdx = line.find("layout")) == string::npos || tmpPositionIdx > commentStartPositionIdx) &&
+				((tmpPositionIdx = line.find("defined(")) == string::npos || tmpPositionIdx > commentStartPositionIdx) &&
+				((tmpPositionIdx = line.find("#define")) == string::npos || tmpPositionIdx > commentStartPositionIdx)) {
 				injectedUniformsAt = i;
 				break;
 			}
