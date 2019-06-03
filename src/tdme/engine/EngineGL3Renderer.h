@@ -16,15 +16,15 @@ class tdme::engine::EngineGL3Renderer: public GL3Renderer
 {
 public:
 	// overriden methods
-	void onUpdateProjectionMatrix() override;
-	void onUpdateCamera() override;
-	void onUpdateModelViewMatrix() override;
-	void onBindTexture(int32_t textureId) override;
-	void onUpdateTextureMatrix() override;
-	void onUpdateEffect() override;
-	void onUpdateLight(int32_t lightId) override;
-	void onUpdateMaterial() override;
-	void onUpdateShader() override;
+	void onUpdateProjectionMatrix(void* context) override;
+	void onUpdateCamera(void* context) override;
+	void onUpdateModelViewMatrix(void* context) override;
+	void onBindTexture(void* context, int32_t textureId) override;
+	void onUpdateTextureMatrix(void* context) override;
+	void onUpdateEffect(void* context) override;
+	void onUpdateLight(void* context, int32_t lightId) override;
+	void onUpdateMaterial(void* context) override;
+	void onUpdateShader(void* context) override;
 
 	/**
 	 * Public constructor

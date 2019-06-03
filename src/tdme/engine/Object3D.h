@@ -46,6 +46,9 @@ class tdme::engine::Object3D final
 	, public Entity
 {
 
+public:
+	enum RenderPass { RENDERPASS_OBJECTS, RENDERPASS_POST_POSTPROCESSING };
+
 private:
 	friend class Engine;
 	friend class LODObject3D;
@@ -59,21 +62,24 @@ private:
 	string shaderId { "default" };
 	string distanceShaderId { "" };
 	float distanceShaderDistance { 50.0f };
+	RenderPass renderPass { RENDERPASS_OBJECTS };
 
 	/**
 	 * Compute skinning
+	 * @param context context
 	 */
-	inline void computeSkinning() {
-		if (hasSkinning == true) computeTransformations();
+	inline void computeSkinning(void* context) {
+		if (hasSkinning == true) computeTransformations(context);
 	}
 
 	/**
 	 * Pre render step like uploading VBOs and such
+	 * @param context context
 	 */
-	inline void preRender() {
+	inline void preRender(void* context) {
 		for (auto object3DGroup: object3dGroups) {
 			if (object3DGroup->renderer->needsPreRender() == true) {
-				object3DGroup->renderer->preRender();
+				object3DGroup->renderer->preRender(context);
 			}
 		}
 	}
@@ -94,6 +100,7 @@ private:
 	}
 
 public:
+
 	void setEngine(Engine* engine) override;
 	void setRenderer(Renderer* renderer) override;
 	void fromTransformations(const Transformations& transformations) override;
@@ -109,7 +116,6 @@ public:
 	 */
 	Object3D(const string& id, Model* model);
 
-public:
 	// overriden methods
 	virtual void dispose() override;
 
@@ -235,8 +241,12 @@ public:
 		return *this;
 	}
 
-	inline void computeTransformations() {
-		Object3DInternal::computeTransformations(engine->getTiming());
+	/**
+	 * Compute transformations
+	 * @param context context
+	 */
+	inline void computeTransformations(void* context) {
+		Object3DInternal::computeTransformations(context, engine->getTiming());
 	}
 
 	/**
@@ -282,6 +292,21 @@ public:
 	 */
 	inline void setDistanceShaderDistance(float distanceShaderDistance) {
 		this->distanceShaderDistance = distanceShaderDistance;
+	}
+
+	/**
+	 * @return render pass
+	 */
+	inline RenderPass getRenderPass() const {
+		return renderPass;
+	}
+
+	/**
+	 * Set render pass
+	 * @param renderPass render pass
+	 */
+	inline void setRenderPass(RenderPass renderPass) {
+		this->renderPass = renderPass;
 	}
 
 };

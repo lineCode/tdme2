@@ -15,6 +15,7 @@
 #include <tdme/engine/subsystems/lighting/fwd-tdme.h>
 #include <tdme/engine/subsystems/manager/fwd-tdme.h>
 #include <tdme/engine/subsystems/rendering/fwd-tdme.h>
+#include <tdme/engine/subsystems/rendering/Object3DVBORenderer_InstancedRenderFunctionParameters.h>
 #include <tdme/engine/subsystems/particlesystem/fwd-tdme.h>
 #include <tdme/engine/subsystems/postprocessing/fwd-tdme.h>
 #include <tdme/engine/subsystems/postprocessing/PostProcessingProgram.h>
@@ -25,13 +26,16 @@
 #include <tdme/gui/nodes/fwd-tdme.h>
 #include <tdme/gui/renderer/fwd-tdme.h>
 #include <tdme/math/fwd-tdme.h>
+#include <tdme/math/Matrix2D3x3.h>
 #include <tdme/math/Matrix4x4.h>
-#include <tdme/utils/fwd-tdme.h>
+#include <tdme/os/threading/Thread.h>
+#include <tdme/os/threading/Semaphore.h>
 
 using std::array;
 using std::map;
 using std::vector;
 using std::string;
+using std::to_string;
 
 using tdme::engine::Camera;
 using tdme::engine::Entity;
@@ -41,12 +45,15 @@ using tdme::engine::Light;
 using tdme::engine::Partition;
 using tdme::engine::Timing;
 using tdme::engine::model::Color4;
+using tdme::engine::model::Material;
 using tdme::engine::subsystems::framebuffer::FrameBufferRenderShader;
 using tdme::engine::subsystems::lighting::LightingShader;
 using tdme::engine::subsystems::manager::MeshManager;
 using tdme::engine::subsystems::manager::TextureManager;
 using tdme::engine::subsystems::manager::VBOManager;
 using tdme::engine::subsystems::rendering::Object3DVBORenderer;
+using tdme::engine::subsystems::rendering::Object3DVBORenderer_InstancedRenderFunctionParameters;
+using tdme::engine::subsystems::rendering::TransparentRenderFacesPool;
 using tdme::engine::subsystems::particlesystem::ParticlesShader;
 using tdme::engine::subsystems::particlesystem::ParticleSystemEntity;
 using tdme::engine::subsystems::postprocessing::PostProcessing;
@@ -60,9 +67,12 @@ using tdme::engine::subsystems::skinning::SkinningShader;
 using tdme::gui::GUI;
 using tdme::gui::renderer::GUIRenderer;
 using tdme::gui::renderer::GUIShader;
+using tdme::math::Matrix2D3x3;
 using tdme::math::Matrix4x4;
 using tdme::math::Vector2;
 using tdme::math::Vector3;
+using tdme::os::threading::Thread;
+using tdme::os::threading::Semaphore;
 
 /** 
  * Engine main class
@@ -91,6 +101,7 @@ class tdme::engine::Engine final
 	friend class tdme::engine::subsystems::rendering::Object3DVBORenderer;
 	friend class tdme::engine::subsystems::rendering::Object3DInternal;
 	friend class tdme::engine::subsystems::rendering::Object3DGroupMesh;
+	friend class tdme::engine::subsystems::rendering::ObjectBuffer;
 	friend class tdme::engine::subsystems::particlesystem::ParticlesShader;
 	friend class tdme::engine::subsystems::postprocessing::PostProcessingProgram;
 	friend class tdme::engine::subsystems::shadowmapping::ShadowMapping;
@@ -104,6 +115,7 @@ class tdme::engine::Engine final
 public:
 	enum AnimationProcessingTarget {CPU, CPU_NORENDERING, GPU};
 	static constexpr int LIGHTS_MAX { 8 };
+	static constexpr int THREADS_MAX { 4 };
 
 protected:
 	static Engine* currentEngine;
@@ -152,6 +164,7 @@ private:
 	map<string, Entity*> noFrustumCullingEntities {  };
 
 	vector<Object3D*> visibleObjects {  };
+	vector<Object3D*> visibleObjectsPostPostProcessing {  };
 	vector<LODObject3D*> visibleLODObjects {  };
 	vector<ObjectParticleSystem*> visibleOpses {  };
 	vector<PointsParticleSystem*> visiblePpses {  };
@@ -171,6 +184,44 @@ private:
 	bool initialized {  };
 
 	bool isUsingPostProcessingTemporaryFrameBuffer {  };
+
+	class EngineThread: public Thread {
+		friend class Engine;
+	private:
+		int idx;
+		Semaphore* engineThreadWaitSemaphore;
+		Semaphore* mainThreadWaitSemaphore;
+		void* context;
+	public:
+		enum State { STATE_WAITING, STATE_TRANSFORMATIONS, STATE_RENDERING, STATE_SPINNING };
+
+		Engine* engine;
+
+		struct {
+			Object3DVBORenderer_InstancedRenderFunctionParameters parameters;
+			vector<Object3D*> objectsNotRendered;
+			TransparentRenderFacesPool* transparentRenderFacesPool;
+		} rendering;
+
+		volatile State state { STATE_WAITING };
+
+	private:
+		/**
+		 * Constructor
+		 * @param idx thread index
+		 * @param engineThreadWaitSemaphore engine thread wait semaphore
+		 * @param context context
+		 */
+		EngineThread(int idx, Semaphore* engineThreadWaitSemaphore, void* context);
+
+		/**
+		 * Run
+		 */
+		virtual void run();
+	};
+
+	static Semaphore engineThreadWaitSemaphore;
+	static vector<EngineThread*> engineThreads;
 
 	/**
 	 * @return mesh manager
@@ -224,6 +275,13 @@ private:
 
 	/**
 	 * Computes visibility and transformations
+	 * @param threadCount thread count
+	 * @param threadIdx thread idx
+	 */
+	void computeTransformationsFunction(int threadCount, int threadIdx);
+
+	/**
+	 * Computes visibility and transformations
 	 */
 	void computeTransformations();
 
@@ -247,7 +305,6 @@ private:
 	 * Private constructor
 	 */
 	Engine();
-
 public:
 
 	/**

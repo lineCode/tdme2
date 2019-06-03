@@ -78,9 +78,10 @@ private:
 
 	/** 
 	 * Applies transformations to meshes for given object 3d groups
+	 * @param context context
 	 * @param object3DGroups group render data list
 	 */
-	static void computeTransformations(vector<Object3DGroup*>& object3DGroups);
+	static void computeTransformations(void* context, vector<Object3DGroup*>& object3DGroups);
 
 	/** 
 	 * Set up textures for given object3d group and faces entity

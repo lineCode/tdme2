@@ -90,9 +90,9 @@ void ShadowMap::dispose()
 	frameBuffer->dispose();
 }
 
-void ShadowMap::bindDepthBufferTexture()
+void ShadowMap::bindDepthBufferTexture(void* context)
 {
-	frameBuffer->bindDepthBufferTexture();
+	frameBuffer->bindDepthBufferTexture(context);
 }
 
 Camera* ShadowMap::getCamera()
@@ -102,6 +102,10 @@ Camera* ShadowMap::getCamera()
 
 void ShadowMap::render(Light* light)
 {
+	// use default context
+	// TODO: object->preRender only uses default context, lets see how to make this multithreaded
+	auto context = shadowMapping->renderer->getDefaultContext();
+
 	// clear visible objects
 	visibleObjects.clear();
 	// viewers camera
@@ -124,7 +128,7 @@ void ShadowMap::render(Light* light)
 	lightCamera->setLookFrom(lightLookFrom);
 	lightCamera->setLookAt(lightLookAt);
 	lightCamera->setUpVector(lightCamera->computeUpVector(lightCamera->getLookFrom(), lightCamera->getLookAt()));
-	lightCamera->update(frameBuffer->getWidth(), frameBuffer->getHeight());
+	lightCamera->update(context, frameBuffer->getWidth(), frameBuffer->getHeight());
 	// Bind frame buffer to shadow map fbo id
 	frameBuffer->enableFrameBuffer();
 	// clear depth buffer
@@ -139,34 +143,34 @@ void ShadowMap::render(Light* light)
 		if ((org = dynamic_cast<Object3DRenderGroup*>(entity)) != nullptr) {
 			if ((object = org->getObject()) != nullptr) {
 				if (object->isDynamicShadowingEnabled() == false) continue;
-				object->preRender();
+				object->preRender(context);
 				visibleObjects.push_back(object);
 			}
 		} else
 		if ((object = dynamic_cast<Object3D*>(entity)) != nullptr) {
 			if (object->isDynamicShadowingEnabled() == false) continue;
-			object->preRender();
+			object->preRender(context);
 			visibleObjects.push_back(object);
 		} else
 		if ((lodObject = dynamic_cast<LODObject3D*>(entity)) != nullptr) {
 			if (lodObject->isDynamicShadowingEnabled() == false) continue;
 			auto object = lodObject->getLODObject();
 			if (object != nullptr) {
-				object->preRender();
+				object->preRender(context);
 				visibleObjects.push_back(object);
 			}
 		} else
 		if ((opse = dynamic_cast<ObjectParticleSystem*>(entity)) != nullptr) {
 			if (opse->isDynamicShadowingEnabled() == false) continue;
 			for (auto object: opse->getEnabledObjects()) {
-				object->preRender();
+				object->preRender(context);
 				visibleObjects.push_back(object);
 			}
 		} else
 		if ((opse = dynamic_cast<ObjectParticleSystem*>(entity)) != nullptr) {
 			if (opse->isDynamicShadowingEnabled() == false) continue;
 			for (auto object: opse->getEnabledObjects()) {
-				object->preRender();
+				object->preRender(context);
 				visibleObjects.push_back(object);
 			}
 		} else
@@ -176,12 +180,11 @@ void ShadowMap::render(Light* light)
 				if (opse == nullptr) continue;
 				if (opse->isDynamicShadowingEnabled() == false) continue;
 				for (auto object: opse->getEnabledObjects()) {
-					object->preRender();
+					object->preRender(context);
 					visibleObjects.push_back(object);
 				}
 			}
 		}
-
 	}
 	// generate shadow map texture matrix
 	computeDepthBiasMVPMatrix();
@@ -205,7 +208,7 @@ void ShadowMap::computeDepthBiasMVPMatrix()
 	depthBiasMVPMatrix.set(modelViewMatrix).multiply(projectionMatrix).multiply(biasMatrix);
 }
 
-void ShadowMap::updateDepthBiasMVPMatrix()
+void ShadowMap::updateDepthBiasMVPMatrix(void* context)
 {
-	shadowMapping->updateDepthBiasMVPMatrix(depthBiasMVPMatrix);
+	shadowMapping->updateDepthBiasMVPMatrix(context, depthBiasMVPMatrix);
 }

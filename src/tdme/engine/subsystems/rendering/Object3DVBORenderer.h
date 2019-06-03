@@ -1,5 +1,9 @@
 #pragma once
 
+#if defined(_WIN32) && defined(_MSC_VER)
+	#include <windows.h>
+#endif
+
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -11,28 +15,38 @@
 #include <tdme/engine/subsystems/renderer/fwd-tdme.h>
 #include <tdme/engine/subsystems/rendering/fwd-tdme.h>
 #include <tdme/engine/subsystems/rendering/Object3DGroup.h>
+#include <tdme/engine/subsystems/rendering/Object3DVBORenderer_InstancedRenderFunctionParameters.h>
+#include <tdme/engine/subsystems/rendering/TransparentRenderFacesPool.h>
 #include <tdme/math/fwd-tdme.h>
+#include <tdme/math/Matrix2D3x3.h>
+#include <tdme/math/Matrix4x4.h>
 #include <tdme/math/Matrix4x4Negative.h>
 #include <tdme/utils/fwd-tdme.h>
 #include <tdme/utils/ByteBuffer.h>
+#include <tdme/utils/Console.h>
 #include <tdme/utils/Pool.h>
 
 using std::unordered_map;
 using std::string;
+using std::to_string;
 using std::vector;
 
 using tdme::engine::Engine;
 using tdme::engine::model::Color4;
+using tdme::engine::model::Material;
 using tdme::engine::subsystems::rendering::BatchVBORendererPoints;
 using tdme::engine::subsystems::rendering::BatchVBORendererTriangles;
 using tdme::engine::subsystems::rendering::Object3DGroup;
 using tdme::engine::subsystems::rendering::TransparentRenderFacesPool;
 using tdme::engine::subsystems::rendering::TransparentRenderPointsPool;
+using tdme::engine::subsystems::rendering::Object3DVBORenderer_InstancedRenderFunctionParameters;
 using tdme::engine::subsystems::renderer::Renderer;
+using tdme::math::Matrix2D3x3;
 using tdme::math::Matrix4x4;
 using tdme::math::Matrix4x4Negative;
 using tdme::math::Vector3;
 using tdme::utils::ByteBuffer;
+using tdme::utils::Console;
 using tdme::utils::Pool;
 
 /** 
@@ -43,6 +57,7 @@ using tdme::utils::Pool;
 class tdme::engine::subsystems::rendering::Object3DVBORenderer final {
 	friend class Object3DGroupVBORenderer;
 	friend class TransparentRenderFacesGroup;
+	friend class tdme::engine::Engine;
 
 private:
 	static constexpr int32_t BATCHVBORENDERER_MAX { 256 };
@@ -50,7 +65,7 @@ private:
 
 	Engine* engine {  };
 	Renderer* renderer {  };
-	vector<int32_t>* vboInstancedRenderingIds {  };
+	vector<vector<int32_t>*> vboInstancedRenderingIds {  };
 	vector<BatchVBORendererTriangles*> trianglesBatchVBORenderers {  };
 	unordered_map<string, vector<Object3D*>> visibleObjectsByModels {  };
 	vector<TransparentRenderFace*> groupTransparentRenderFaces {  };
@@ -62,9 +77,10 @@ private:
 	Matrix4x4Negative matrix4x4Negative {  };
 	vector<Object3D*> objectsToRender;
 	vector<Object3D*> objectsNotRendered;
-	ByteBuffer* bbEffectColorMuls { nullptr };
-	ByteBuffer* bbEffectColorAdds { nullptr };
-	ByteBuffer* bbMvMatrices { nullptr };
+	int threadCount;
+	vector<ByteBuffer*> bbEffectColorMuls;
+	vector<ByteBuffer*> bbEffectColorAdds;
+	vector<ByteBuffer*> bbMvMatrices;
 
 	/** 
 	 * Renders transparent faces
@@ -76,8 +92,9 @@ private:
 
 	/** 
 	 * Render transparent faces groups
+	 * @param context context
 	 */
-	void renderTransparentFacesGroups();
+	void renderTransparentFacesGroups(void* context);
 
 	/** 
 	 * Release transparent faces groups
@@ -101,6 +118,16 @@ private:
 	void renderObjectsOfSameTypeNonInstanced(const vector<Object3D*>& objects, bool collectTransparentFaces, int32_t renderTypes);
 
 	/**
+	 * Render thread function
+	 * @param threadIdx thread idx
+	 * @param context context
+	 * @param parameters parameters
+	 * @param objectsNotRendered objects not rendered
+	 * @param transparentRenderFacesPool transparent render faces pool
+	 */
+	void instancedRenderFunction(int threadIdx, void* context, const Object3DVBORenderer_InstancedRenderFunctionParameters& parameters, vector<Object3D*>& objectsNotRendered, TransparentRenderFacesPool* transparentRenderFacesPool);
+
+	/**
 	 * Renders multiple objects of same type(with same model) using instancing
 	 * @param objects objects of same type/ with same models
 	 * @param collectTransparentFaces collect render faces
@@ -120,6 +147,7 @@ private:
 
 	/**
 	 * Set ups a material for rendering
+	 * @param context context
 	 * @param object3DGroup object 3d group
 	 * @param facesEntityIdx faces entity idx
 	 * @param renderTypes render types
@@ -127,12 +155,13 @@ private:
 	 * @param materialKey material key
 	 * @param currentMaterialKey current material key or empty
 	 */
-	void setupMaterial(Object3DGroup* object3DGroup, int32_t facesEntityIdx, int32_t renderTypes, bool updateOnly, string& materialKey, const string& currentMaterialKey = string());
+	void setupMaterial(void* context, Object3DGroup* object3DGroup, int32_t facesEntityIdx, int32_t renderTypes, bool updateOnly, string& materialKey, const string& currentMaterialKey = string());
 
 	/** 
 	 * Clear material for rendering
+	 * @param context context
 	 */
-	void clearMaterial();
+	void clearMaterial(void* context);
 
 public:
 	static constexpr int32_t RENDERTYPE_NORMALS { 1 };

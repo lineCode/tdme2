@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 
+#include <tdme/tdme.h>
 #include <tdme/engine/fileio/models/ModelFileIOException.h>
 #include <tdme/engine/model/Group.h>
 #include <tdme/math/Matrix4x4.h>
@@ -62,11 +63,12 @@ public:
 	 * @param pathName path name
 	 * @param fileName file name
 	 * @param level level
+	 * @param progressCallback progress callback
 	 * @throws file system exception
 	 * @throws json exception
 	 * @throws model file io exception
 	 */
-	static void doImportFromModel(const string& pathName, const string& fileName, LevelEditorLevel* level) throw (FileSystemException, JsonException, ModelFileIOException);
+	static void doImportFromModel(const string& pathName, const string& fileName, LevelEditorLevel* level, ProgressCallback* progressCallback = nullptr) throw (FileSystemException, JsonException, ModelFileIOException);
 
 private:
 	struct LevelEditorEntityMeshGroup {

@@ -53,7 +53,7 @@ void BatchVBORendererPoints::initialize()
 	}
 }
 
-void BatchVBORendererPoints::render()
+void BatchVBORendererPoints::render(void* context)
 {
 	// skip if no vertex data exists
 	if (fbVertices.getPosition() == 0 || fbColors.getPosition() == 0)
@@ -62,15 +62,15 @@ void BatchVBORendererPoints::render()
 	// determine point count
 	auto points = fbVertices.getPosition() / 3 /* 3 components */;
 	// upload vertices
-	renderer->uploadBufferObject((*vboIds)[0], fbVertices.getPosition() * sizeof(float), &fbVertices);
+	renderer->uploadBufferObject(context, (*vboIds)[0], fbVertices.getPosition() * sizeof(float), &fbVertices);
 	// upload colors
-	renderer->uploadBufferObject((*vboIds)[1], fbColors.getPosition() * sizeof(float), &fbColors);
+	renderer->uploadBufferObject(context, (*vboIds)[1], fbColors.getPosition() * sizeof(float), &fbColors);
 	// bind vertices
-	renderer->bindVerticesBufferObject((*vboIds)[0]);
+	renderer->bindVerticesBufferObject(context, (*vboIds)[0]);
 	// bind colors
-	renderer->bindColorsBufferObject((*vboIds)[1]);
+	renderer->bindColorsBufferObject(context, (*vboIds)[1]);
 	// draw
-	renderer->drawPointsFromBufferObjects(points, 0);
+	renderer->drawPointsFromBufferObjects(context, points, 0);
 }
 
 void BatchVBORendererPoints::dispose()

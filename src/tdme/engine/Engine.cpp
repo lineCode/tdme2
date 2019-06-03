@@ -43,9 +43,12 @@
 #include <tdme/engine/subsystems/manager/MeshManager.h>
 #include <tdme/engine/subsystems/manager/TextureManager.h>
 #include <tdme/engine/subsystems/manager/VBOManager.h>
+#include <tdme/engine/subsystems/rendering/ObjectBuffer.h>
 #include <tdme/engine/subsystems/rendering/Object3DBase_TransformedFacesIterator.h>
 #include <tdme/engine/subsystems/rendering/Object3DGroupMesh.h>
 #include <tdme/engine/subsystems/rendering/Object3DVBORenderer.h>
+#include <tdme/engine/subsystems/rendering/Object3DVBORenderer_InstancedRenderFunctionParameters.h>
+#include <tdme/engine/subsystems/rendering/TransparentRenderFacesPool.h>
 #include <tdme/engine/subsystems/particlesystem/ParticleSystemEntity.h>
 #include <tdme/engine/subsystems/particlesystem/ParticlesShader.h>
 #include <tdme/engine/subsystems/postprocessing/PostProcessing.h>
@@ -105,6 +108,9 @@ using tdme::engine::subsystems::manager::TextureManager;
 using tdme::engine::subsystems::manager::VBOManager;
 using tdme::engine::subsystems::rendering::Object3DBase_TransformedFacesIterator;
 using tdme::engine::subsystems::rendering::Object3DVBORenderer;
+using tdme::engine::subsystems::rendering::Object3DVBORenderer_InstancedRenderFunctionParameters;
+using tdme::engine::subsystems::rendering::ObjectBuffer;
+using tdme::engine::subsystems::rendering::TransparentRenderFacesPool;
 using tdme::engine::subsystems::particlesystem::ParticleSystemEntity;
 using tdme::engine::subsystems::particlesystem::ParticlesShader;
 using tdme::engine::subsystems::postprocessing::PostProcessing;
@@ -150,9 +156,45 @@ Engine* Engine::currentEngine = nullptr;
 bool Engine::skinningShaderEnabled = false;
 bool Engine::have4K = false;
 float Engine::animationBlendingTime = 250.0f;
+Semaphore Engine::engineThreadWaitSemaphore("enginethread-waitsemaphore", 0);
+vector<Engine::EngineThread*> Engine::engineThreads;
 
-Engine::Engine() 
-{
+Engine::EngineThread::EngineThread(int idx, Semaphore* engineThreadWaitSemaphore, void* context):
+	Thread("enginethread"),
+	idx(idx),
+	engineThreadWaitSemaphore(engineThreadWaitSemaphore),
+	context(context) {
+	//
+	rendering.transparentRenderFacesPool = new TransparentRenderFacesPool();
+}
+
+
+void Engine::EngineThread::run() {
+	Console::println("EngineThread::" + string(__FUNCTION__) + "()[" + to_string(idx) + "]: INIT");
+	while (isStopRequested() == false) {
+		switch(state) {
+			case STATE_WAITING:
+				engineThreadWaitSemaphore->wait();
+				break;
+			case STATE_TRANSFORMATIONS:
+				engine->computeTransformationsFunction(THREADS_MAX, idx);
+				state = STATE_SPINNING;
+				break;
+			case STATE_RENDERING:
+				rendering.objectsNotRendered.clear();
+				rendering.transparentRenderFacesPool->reset();
+				engine->object3DVBORenderer->instancedRenderFunction(idx, context, rendering.parameters, rendering.objectsNotRendered, rendering.transparentRenderFacesPool);
+				state = STATE_SPINNING;
+				break;
+			case STATE_SPINNING:
+				while (state == STATE_SPINNING);
+				break;
+		}
+	}
+	Console::println("EngineThread::" + string(__FUNCTION__) + "()[" + to_string(idx) + "]: DONE");
+}
+
+Engine::Engine() {
 	timing = new Timing();
 	camera = nullptr;
 	sceneColor.set(0.0f, 0.0f, 0.0f, 1.0f);
@@ -252,6 +294,7 @@ Engine* Engine::createOffScreenInstance(int32_t width, int32_t height)
 	if (instance->shadowMappingEnabled == true) {
 		offScreenEngine->shadowMapping = new ShadowMapping(offScreenEngine, renderer, offScreenEngine->object3DVBORenderer);
 	}
+	//
 	offScreenEngine->reshape(0, 0, width, height);
 	return offScreenEngine;
 }
@@ -545,6 +588,9 @@ void Engine::initialize(bool debug)
 		#endif
 	#endif
 
+	// initialize object buffers
+	ObjectBuffer::initialize();
+
 	// create manager
 	textureManager = new TextureManager(renderer);
 	vboManager = new VBOManager(renderer);
@@ -646,6 +692,19 @@ void Engine::initialize(bool debug)
 	initialized &= postProcessingShader->isInitialized();
 
 	//
+	if (renderer->isSupportingMultithreadedRendering() == true) {
+		engineThreads.resize(THREADS_MAX - 1);
+		for (auto i = 0; i < THREADS_MAX - 1; i++) {
+			engineThreads[i] = new EngineThread(
+				i + 1,
+				&engineThreadWaitSemaphore,
+				renderer->getContext(i + 1)
+			);
+			engineThreads[i]->start();
+		}
+	}
+
+	//
 	Console::println(string("TDME::initialized & ready: ") + to_string(initialized));
 }
 
@@ -678,11 +737,9 @@ void Engine::initRendering()
 	// update timing
 	timing->updateTiming();
 
-	// update camera
-	camera->update(width, height);
-
 	// clear lists of visible objects
 	visibleObjects.clear();
+	visibleObjectsPostPostProcessing.clear();
 	visibleLODObjects.clear();
 	visibleOpses.clear();
 	visiblePpses.clear();
@@ -691,6 +748,20 @@ void Engine::initRendering()
 
 	//
 	renderingInitiated = true;
+}
+
+void Engine::computeTransformationsFunction(int threadCount, int threadIdx) {
+	auto context = renderer->getContext(threadIdx);
+	auto objectIdx = 0;
+	for (auto object: visibleObjects) {
+		if (threadCount > 1 && objectIdx % threadCount != threadIdx) {
+			objectIdx++;
+			continue;
+		}
+		object->preRender(context);
+		object->computeSkinning(context);
+		objectIdx++;
+	}
 }
 
 void Engine::computeTransformations()
@@ -709,24 +780,30 @@ void Engine::computeTransformations()
 	#define COMPUTE_ENTITY_TRANSFORMATIONS(_entity) \
 	{ \
 		if ((object = dynamic_cast<Object3D*>(_entity)) != nullptr) { \
-			object->preRender(); \
-			object->computeSkinning(); \
-			visibleObjects.push_back(object); \
+			if (object->getRenderPass() == Object3D::RENDERPASS_POST_POSTPROCESSING) { \
+				visibleObjectsPostPostProcessing.push_back(object); \
+			} else { \
+				visibleObjects.push_back(object); \
+			} \
 		} else \
 		if ((lodObject = dynamic_cast<LODObject3D*>(_entity)) != nullptr) { \
 			auto object = lodObject->determineLODObject(camera); \
 			if (object != nullptr) { \
 				visibleLODObjects.push_back(lodObject); \
-				visibleObjects.push_back(object); \
-				object->preRender(); \
-				object->computeSkinning(); \
+				if (object->getRenderPass() == Object3D::RENDERPASS_POST_POSTPROCESSING) { \
+					visibleObjectsPostPostProcessing.push_back(object); \
+				} else { \
+					visibleObjects.push_back(object); \
+				} \
 			} \
 		} else \
 		if ((opse = dynamic_cast<ObjectParticleSystem*>(_entity)) != nullptr) { \
 			for (auto object: opse->getEnabledObjects()) { \
-				object->preRender(); \
-				object->computeSkinning(); \
-				visibleObjects.push_back(object); \
+				if (object->getRenderPass() == Object3D::RENDERPASS_POST_POSTPROCESSING) { \
+					visibleObjectsPostPostProcessing.push_back(object); \
+				} else { \
+					visibleObjects.push_back(object); \
+				} \
 			} \
 			visibleOpses.push_back(opse); \
 		} else \
@@ -779,7 +856,18 @@ void Engine::computeTransformations()
 		}
 	}
 
-	// TODO: improve met
+	//
+	if (skinningShaderEnabled == true) skinningShader->useProgram();
+	if (renderer->isSupportingMultithreadedRendering() == false) {
+		computeTransformationsFunction(1, 0);
+	} else {
+		for (auto engineThread: engineThreads) engineThread->engine = this;
+		for (auto engineThread: engineThreads) engineThread->state = EngineThread::STATE_TRANSFORMATIONS;
+		engineThreadWaitSemaphore.increment(THREADS_MAX - 1);
+		computeTransformationsFunction(THREADS_MAX, 0);
+		for (auto engineThread: engineThreads) while (engineThread->state == EngineThread::STATE_TRANSFORMATIONS);
+		for (auto engineThread: engineThreads) engineThread->state = EngineThread::STATE_SPINNING;
+	}
 	if (skinningShaderEnabled == true) {
 		skinningShader->unUseProgram();
 	}
@@ -803,12 +891,14 @@ void Engine::display()
 	// init frame
 	Engine::renderer->initializeFrame();
 
+	// default context
+	auto context = Engine::renderer->getDefaultContext();
+
 	// update camera
-	camera->update(width, height);
+	camera->update(context, width, height);
 
 	// create shadow maps
-	if (shadowMapping != nullptr)
-		shadowMapping->createShadowMaps();
+	if (shadowMapping != nullptr) shadowMapping->createShadowMaps();
 
 	// create post processing frame buffers if having post processing
 	if (postProcessingPrograms.size() > 0) {
@@ -847,15 +937,10 @@ void Engine::display()
 	renderer->clear(renderer->CLEAR_DEPTH_BUFFER_BIT | renderer->CLEAR_COLOR_BUFFER_BIT);
 
 	// restore camera from shadow map rendering
-	camera->update(width, height);
-
-	// enable materials
-	renderer->setMaterialEnabled();
+	camera->update(context, width, height);
 
 	// use lighting shader
-	if (lightingShader != nullptr) {
-		lightingShader->useProgram(this);
-	}
+	if (lightingShader != nullptr) lightingShader->useProgram(this);
 
 	// render objects
 	object3DVBORenderer->render(
@@ -874,15 +959,11 @@ void Engine::display()
 
 	// unuse lighting shader
 	if (lightingShader != nullptr) {
-		lightingShader->unUseProgram();
+		lightingShader->unUseProgram(renderer->getDefaultContext()); // TODO: a.drewke
 	}
 
 	// render shadows if required
-	if (shadowMapping != nullptr)
-		shadowMapping->renderShadowMaps(visibleObjects);
-
-	// disable materials
-	renderer->setMaterialDisabled();
+	if (shadowMapping != nullptr) shadowMapping->renderShadowMaps(visibleObjects);
 
 	// store matrices
 	modelViewMatrix.set(renderer->getModelViewMatrix());
@@ -896,17 +977,13 @@ void Engine::display()
 	}
 
 	// use particle shader
-	if (particlesShader != nullptr) {
-		particlesShader->useProgram();
-	}
+	if (particlesShader != nullptr) particlesShader->useProgram(context);
 
 	// render points based particle systems
 	object3DVBORenderer->render(visiblePpses);
 
 	// unuse particle shader
-	if (particlesShader != nullptr) {
-		particlesShader->unUseProgram();
-	}
+	if (particlesShader != nullptr) particlesShader->unUseProgram(context);
 
 	// render objects and particles together
 	if (postProcessingPrograms.size() > 0) {
@@ -914,8 +991,35 @@ void Engine::display()
 	}
 
 	// render objects to target frame buffer or screen
-	if (frameBuffer != nullptr) {
-		frameBuffer->disableFrameBuffer();
+	if (frameBuffer != nullptr) frameBuffer->disableFrameBuffer();
+
+	// render objects that are have post post processing render pass
+	if (visibleObjectsPostPostProcessing.size() > 0) {
+		// use lighting shader
+		if (lightingShader != nullptr) {
+			lightingShader->useProgram(this);
+		}
+
+		// render post processing objects
+		object3DVBORenderer->render(
+			visibleObjectsPostPostProcessing,
+			true,
+			Object3DVBORenderer::RENDERTYPE_NORMALS |
+			Object3DVBORenderer::RENDERTYPE_TEXTUREARRAYS |
+			Object3DVBORenderer::RENDERTYPE_TEXTUREARRAYS_DIFFUSEMASKEDTRANSPARENCY |
+			Object3DVBORenderer::RENDERTYPE_EFFECTCOLORS |
+			Object3DVBORenderer::RENDERTYPE_MATERIALS |
+			Object3DVBORenderer::RENDERTYPE_MATERIALS_DIFFUSEMASKEDTRANSPARENCY |
+			Object3DVBORenderer::RENDERTYPE_TEXTURES |
+			Object3DVBORenderer::RENDERTYPE_TEXTURES_DIFFUSEMASKEDTRANSPARENCY |
+			Object3DVBORenderer::RENDERTYPE_LIGHTS
+		);
+
+		// unuse lighting shader
+		if (lightingShader != nullptr) lightingShader->unUseProgram(renderer->getDefaultContext()); // TODO: a.drewke
+
+		// render shadows if required
+		if (shadowMapping != nullptr) shadowMapping->renderShadowMaps(visibleObjectsPostPostProcessing);
 	}
 
 	// delete post processing termporary buffer if not required anymore
@@ -928,6 +1032,9 @@ void Engine::display()
 	// clear pre render states
 	renderingInitiated = false;
 	renderingComputedTransformations = false;
+
+	//
+	for (auto engineThread: engineThreads) engineThread->state = EngineThread::STATE_WAITING;
 }
 
 void Engine::computeWorldCoordinateByMousePosition(int32_t mouseX, int32_t mouseY, float z, Vector3& worldCoordinate)
@@ -992,6 +1099,29 @@ Entity* Engine::getEntityByMousePosition(int32_t mouseX, int32_t mouseY, EntityP
 
 	// iterate visible objects, check if ray with given mouse position from near plane to far plane collides with each object's triangles
 	for (auto entity: visibleObjects) {
+		// skip if not pickable or ignored by filter
+		if (entity->isPickable() == false) continue;
+		if (filter != nullptr && filter->filterEntity(entity) == false) continue;
+		// do the collision test
+		if (LineSegment::doesBoundingBoxCollideWithLineSegment(entity->getBoundingBoxTransformed(), tmpVector3a, tmpVector3b, tmpVector3c, tmpVector3d) == true) {
+			for (auto _i = entity->getTransformedFacesIterator()->iterator(); _i->hasNext(); ) {
+				auto vertices = _i->next();
+				{
+					if (LineSegment::doesLineSegmentCollideWithTriangle((*vertices)[0], (*vertices)[1], (*vertices)[2], tmpVector3a, tmpVector3b, tmpVector3e) == true) {
+						auto entityDistance = tmpVector3e.sub(tmpVector3a).computeLength();
+						// check if match or better match
+						if (selectedEntity == nullptr || entityDistance < selectedEntityDistance) {
+							selectedEntity = entity;
+							selectedEntityDistance = entityDistance;
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// iterate visible objects that have post post processing renderpass, check if ray with given mouse position from near plane to far plane collides with each object's triangles
+	for (auto entity: visibleObjectsPostPostProcessing) {
 		// skip if not pickable or ignored by filter
 		if (entity->isPickable() == false) continue;
 		if (filter != nullptr && filter->filterEntity(entity) == false) continue;
