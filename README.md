@@ -170,7 +170,7 @@
     - Expose shader and post processing programs setup API
     - Some UI elements need some default skinning fixes
     - WaveFront OBJ model file reader is broken currently
-    - Integrate LUA to be able to write TDME2 applications completely via LUA or game logics
+    - Integrate a scripting language to be able to script TDME2 applications or sub logics
     - Build documentation
     - Public API documentation
     - A release plan
@@ -216,7 +216,7 @@
         - iOS(port pending)
 
 - Links
-	- TDME2 Engine, see [README.md](./README.md)
+    - TDME2 Engine, see [README.md](./README.md)
     - TDME2 Model Editor, see [README-ModelEditor.md](./README-ModelEditor.md)
     - TDME2 Particle System Editor, see [README-ParticleSystemEditor.md](./README-ParticleSystemEditor.md)
     - TDME2 Level Editor, see [README-LevelEditor.md](./README-LevelEditor.md)
@@ -240,3 +240,5 @@
     - I have easy to hard task regarding engine/tools development
     - I have tasks regarding documentation
     - I even might have system administrator tasks
+
+- I have to pay my bills and beer, so if you have any use for this open source project, like educational, productive or fun, ..., consider a donation here https://www.paypal.me/andreasdrewke
