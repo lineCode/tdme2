@@ -38,7 +38,7 @@ void EngineGL2Renderer::onUpdateProjectionMatrix(void* context)
 		Engine::ezrShaderPre->updateMatrices(context);
 }
 
-void EngineGL2Renderer::onUpdateCameraMatrix(void* context)
+void EngineGL2Renderer::onUpdateCamera(void* context)
 {
 	if (Engine::lightingShader != nullptr)
 		Engine::lightingShader->updateMatrices(this, context);

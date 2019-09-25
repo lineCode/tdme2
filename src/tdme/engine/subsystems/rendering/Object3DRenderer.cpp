@@ -613,7 +613,7 @@ void Object3DRenderer::instancedRenderFunction(int threadIdx, void* context, con
 	vector<int32_t>* boundVBOTangentBitangentIds = nullptr;
 	auto objectCount = objectsToRender.size();
 	// issue upload matrices
-	renderer->onUpdateCameraMatrix(context);
+	renderer->onUpdateCamera(context);
 	renderer->onUpdateProjectionMatrix(context);
 	// draw objects
 	for (auto objectIdx = 0; objectIdx < objectCount; objectIdx++) {

@@ -13,6 +13,7 @@
 #include <tdme/math/fwd-tdme.h>
 #include <tdme/math/Matrix2D3x3.h>
 #include <tdme/math/Matrix4x4.h>
+#include <tdme/math/Vector3.h>
 
 using std::array;
 using std::vector;
@@ -70,6 +71,7 @@ protected:
 	Matrix4x4 modelViewMatrix {  };
 	Matrix4x4 viewportMatrix {  };
 	Matrix2D3x3 textureMatrix {  };
+	Vector3 cameraPosition {  };
 
 public:
 	float pointSize {  };
@@ -321,16 +323,20 @@ public:
 	 */
 	virtual void onUpdateProjectionMatrix(void* context) = 0;
 
+	/**
+	 * @return camera position
+	 */
+	virtual Vector3& getCameraPosition();
+
 	/** 
 	 * @return camera matrix
 	 */
 	virtual Matrix4x4& getCameraMatrix();
 
 	/** 
-	 * Update camera matrix event
-	 * @param context context
+	 * Update camera matrix and position
 	 */
-	virtual void onUpdateCameraMatrix(void* context) = 0;
+	virtual void onUpdateCamera(void* context) = 0;
 
 	/** 
 	 * @return model view matrix

@@ -142,8 +142,9 @@ void Camera::update(void* context, int32_t width, int32_t height)
 	renderer->onUpdateProjectionMatrix(context);
 	renderer->getModelViewMatrix().set(computeModelViewMatrix(lookFrom, lookAt, upVector));
 	renderer->onUpdateModelViewMatrix(context);
+	renderer->getCameraPosition().set(lookFrom);
 	renderer->getCameraMatrix().set(renderer->getModelViewMatrix());
-	renderer->onUpdateCameraMatrix(context);
+	renderer->onUpdateCamera(context);
 
 	frustumChanged =
 		reshaped == true ||

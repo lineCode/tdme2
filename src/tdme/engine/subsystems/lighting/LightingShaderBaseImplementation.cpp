@@ -94,10 +94,9 @@ void LightingShaderBaseImplementation::initialize()
 		uniformEffectColorAdd = renderer->getProgramUniformLocation(renderLightingProgramId, "effectColorAdd");
 		if (uniformEffectColorAdd == -1) return;
 	} else {
+		uniformCameraPosition = renderer->getProgramUniformLocation(renderLightingProgramId, "cameraPosition");
 		uniformCameraMatrix = renderer->getProgramUniformLocation(renderLightingProgramId, "cameraMatrix");
-		if (uniformCameraMatrix == -1) return;
 		uniformProjectionMatrix = renderer->getProgramUniformLocation(renderLightingProgramId, "projectionMatrix");
-		if (uniformProjectionMatrix == -1) return;
 	}
 
 	//	material
@@ -130,6 +129,7 @@ void LightingShaderBaseImplementation::initialize()
 	// use foliage animation
 	uniformFrame = renderer->getProgramUniformLocation(renderLightingProgramId, "frame");
 
+	Console::println("yyy");
 	//
 	initialized = true;
 }
@@ -140,8 +140,9 @@ void LightingShaderBaseImplementation::useProgram(Engine* engine, void* context)
 	renderer->useProgram(renderLightingProgramId);
 	// initialize static uniforms
 	if (renderer->isInstancedRenderingAvailable() == true) {
-		renderer->setProgramUniformFloatMatrix4x4(context, uniformProjectionMatrix, renderer->getProjectionMatrix().getArray());
-		renderer->setProgramUniformFloatMatrix4x4(context, uniformCameraMatrix, renderer->getCameraMatrix().getArray());
+		if (uniformProjectionMatrix != -1) renderer->setProgramUniformFloatMatrix4x4(context, uniformProjectionMatrix, renderer->getProjectionMatrix().getArray());
+		if (uniformCameraPosition != -1) renderer->setProgramUniformFloatVec3(context, uniformCameraPosition, renderer->getCameraPosition().getArray());
+		if (uniformCameraMatrix != -1) renderer->setProgramUniformFloatMatrix4x4(context, uniformCameraMatrix, renderer->getCameraMatrix().getArray());
 	}
 	if (uniformDiffuseTextureUnit != -1) {
 		renderer->setProgramUniformInteger(context, uniformDiffuseTextureUnit, LightingShaderConstants::TEXTUREUNIT_DIFFUSE);

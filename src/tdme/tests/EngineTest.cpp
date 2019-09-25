@@ -242,7 +242,7 @@ void EngineTest::initialize()
 	cam->setLookAt(Vector3(0.0f, 0.5f, 0.0f));
 	cam->setUpVector(cam->computeUpVector(cam->getLookFrom(), cam->getLookAt()));
 	auto light0 = engine->getLightAt(0);
-	light0->setAmbient(Color4(0.5f, 0.5f, 0.5f, 1.0f));
+	light0->setAmbient(Color4(1.0f, 1.0f, 1.0f, 1.0f));
 	light0->setSpecular(Color4(1.0f, 1.0f, 1.0f, 1.0f));
 	light0->setPosition(Vector4(0.0f, 20000.0f, 0.0f, 1.0f));
 	light0->setSpotDirection(Vector3(0.0f, 0.0f, 0.0f).sub(Vector3(light0->getPosition().getX(), light0->getPosition().getY(), light0->getPosition().getZ())));
@@ -253,12 +253,12 @@ void EngineTest::initialize()
 	light0->setSpotCutOff(180.0f);
 	light0->setEnabled(true);
 	auto light1 = engine->getLightAt(1);
-	light1->setDiffuse(Color4(0.0f, 0.0f, 0.5f, 1.0f));
+	light1->setDiffuse(Color4(0.0f, 0.0f, 1.0f, 1.0f));
 	light1->setPosition(Vector4(-4.0f, 5.0f, -5.0f, 1.0f));
 	light1->setSpotDirection(Vector3(0.0f, 0.0f, 0.0f).sub(Vector3(light1->getPosition().getX(), light1->getPosition().getY(), light1->getPosition().getZ())));
 	light1->setEnabled(true);
 	auto light2 = engine->getLightAt(2);
-	light2->setDiffuse(Color4(0.0f, 0.5f, 0.0f, 1.0f));
+	light2->setDiffuse(Color4(0.0f, 0.1f, 0.0f, 1.0f));
 	light2->setPosition(Vector4(+4.0f, 5.0f, 0.0f, 1.0f));
 	light2->setSpotDirection(Vector3(0.0f, 0.0f, 0.0f).sub(Vector3(light2->getPosition().getX(), light2->getPosition().getY(), light2->getPosition().getZ())));
 	light2->setEnabled(true);

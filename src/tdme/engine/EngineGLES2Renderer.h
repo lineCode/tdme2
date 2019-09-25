@@ -17,7 +17,7 @@ class tdme::engine::EngineGLES2Renderer: public GLES2Renderer
 public:
 	// overriden methods
 	void onUpdateProjectionMatrix(void* context) override;
-	void onUpdateCameraMatrix(void* context) override;
+	void onUpdateCamera(void* context) override;
 	void onUpdateModelViewMatrix(void* context) override;
 	void onBindTexture(void* context, int32_t textureId) override;
 	void onUpdateTextureMatrix(void* context) override;

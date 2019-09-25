@@ -35,7 +35,7 @@ void EngineVKRenderer::onUpdateProjectionMatrix(void* context)
 		Engine::currentEngine->shadowMapping->updateMatrices(this, context);
 }
 
-void EngineVKRenderer::onUpdateCameraMatrix(void* context)
+void EngineVKRenderer::onUpdateCamera(void* context)
 {
 	if (Engine::lightingShader != nullptr)
 		Engine::lightingShader->updateMatrices(this, context);

@@ -40,7 +40,7 @@ void EngineGL3Renderer::onUpdateProjectionMatrix(void* context)
 		Engine::ezrShaderPre->updateMatrices(context);
 }
 
-void EngineGL3Renderer::onUpdateCameraMatrix(void* context)
+void EngineGL3Renderer::onUpdateCamera(void* context)
 {
 	if (Engine::lightingShader != nullptr)
 		Engine::lightingShader->updateMatrices(this, context);
